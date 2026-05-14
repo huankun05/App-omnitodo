@@ -1,0 +1,106 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Node.js dependencies
+**/node_modules/
+**/node_cache/
+
+# Environment files
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Database files
+**/*.db
+**/*.db-journal
+
+# Log files
+**/*.log
+
+# Claude AI files
+/.claude/
+/.workbuddy/
+
+# Windows build outputs
+/windows/flutter/*.d
+/windows/runner/*.d
+/windows/runner/Debug/
+/windows/runner/Release/
+/windows/runner/build/
+/windows/runner/.dart_tool/
+
+# macOS build outputs
+/macos/.dart_tool/
+/macos/Flutter/Flutter.podspec
+/macos/Runner/Flutter/Flutter macos.xcframework/
+/macos/Flutter/ephemeral/
+/macos/build/
+
+# Linux build outputs
+/linux/.dart_tool/
+/linux/Flutter/Flutter.podspec
+/linux/build/
+/linux/flutter/ephemeral/
+
+# iOS/Pods
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Flutter.framework/
+/ios/Flutter/Flutter.podspec
+/ios/Flutter/ServiceDefinitions.json
+/ios/Runner/Flutter/.last_build_id
+/ios/build/
+
+# Android build
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/app/release/
+
+# Temporary files
+*.tmp
+*.temp
+~*

@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     Task[]
+  categories Category[]
+  focusSessions FocusSession[]
+  telemetryEvents TelemetryEvent[]
+  projects Project[]
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  color     String   @default("#004AC6")
+  icon      String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  isCompleted Boolean  @default(false)
+  priority    String   @default("medium")
+  category    String   @default("general")
+  dueDate     DateTime?
+  isStarred   Boolean  @default(false)
+  deletedAt   DateTime?
+  originalCategory String?  // 删除前的分类，恢复时使用
+  originalProjectId String? // 删除前的项目，恢复时使用
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  focusSessions FocusSession[]
+  subTasks    SubTask[]
+}
+
+model SubTask {
+  id          String   @id @default(uuid())
+  title       String
+  completed   Boolean  @default(false)
+  order       Int      @default(0)  // 排序字段
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id    String @id @default(uuid())
+  name  String
+  color String
+  icon  String?
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([name, userId])
+}
+
+model FocusSession {
+  id        String   @id @default(uuid())
+  startTime DateTime @default(now())
+  endTime   DateTime?
+  duration  Int
+  completed Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model TelemetryEvent {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventType       String
+  payload         String   // JSON string
+  clientCreatedAt DateTime
+  serverCreatedAt DateTime @default(now())
+}

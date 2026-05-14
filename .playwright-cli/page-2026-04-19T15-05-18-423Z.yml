@@ -1,0 +1,85 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]: task_alt
+        - generic [ref=e6]: OmniTodo
+      - generic [ref=e7]:
+        - navigation [ref=e8]:
+          - link "Tasks" [ref=e9] [cursor=pointer]:
+            - /url: "#"
+          - link "Calendar" [ref=e10] [cursor=pointer]:
+            - /url: "#"
+          - link "Focus" [ref=e11] [cursor=pointer]:
+            - /url: "#"
+        - generic [ref=e12]:
+          - button "calendar_month" [ref=e13] [cursor=pointer]:
+            - generic [ref=e14]: calendar_month
+          - img "User profile" [ref=e15]
+  - main [ref=e16]:
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - button "close" [ref=e21] [cursor=pointer]
+          - generic [ref=e22]: Task Detail
+        - generic [ref=e23]:
+          - button "Save Changes" [ref=e24] [cursor=pointer]
+          - button "more_vert" [ref=e25] [cursor=pointer]
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - textbox "Untitled Task" [ref=e28]: Design Q3 Marketing Campaign
+          - generic [ref=e30]:
+            - generic [ref=e31]: schedule
+            - text: Created 2 days ago
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e34]:
+              - text: Tags
+              - generic [ref=e35]:
+                - button "Work" [ref=e36] [cursor=pointer]
+                - button "Personal" [ref=e37] [cursor=pointer]
+                - button "Health" [ref=e38] [cursor=pointer]
+                - button "add_circle" [ref=e39] [cursor=pointer]
+            - generic [ref=e40]:
+              - text: Priority
+              - generic [ref=e41]:
+                - button "High" [ref=e42] [cursor=pointer]
+                - button "Medium" [ref=e43] [cursor=pointer]
+                - button "Low" [ref=e44] [cursor=pointer]
+          - generic [ref=e45]:
+            - generic [ref=e46]: Due Date
+            - generic [ref=e47] [cursor=pointer]:
+              - generic [ref=e49]: calendar_today
+              - generic [ref=e50]:
+                - generic [ref=e51]: Oct 24, 2023
+                - generic [ref=e52]: Tuesday • 5:00 PM
+        - generic [ref=e53]:
+          - generic [ref=e54]:
+            - generic [ref=e55]: Sub-Tasks (3/5)
+            - generic [ref=e56]: 60% Complete
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - generic [ref=e61]: check_circle
+              - generic [ref=e62]: Identify target audience demographics
+              - generic [ref=e63] [cursor=pointer]: drag_indicator
+            - generic [ref=e64]:
+              - generic [ref=e65]: check_circle
+              - generic [ref=e66]: Review Q2 conversion metrics
+              - generic [ref=e67] [cursor=pointer]: drag_indicator
+            - generic [ref=e68]:
+              - generic [ref=e69] [cursor=pointer]: radio_button_unchecked
+              - textbox [ref=e70]: Draft social media copy for Instagram
+              - generic [ref=e71] [cursor=pointer]: drag_indicator
+            - button "add Add Sub-Task" [ref=e72] [cursor=pointer]:
+              - generic [ref=e73]: add
+              - generic [ref=e74]: Add Sub-Task
+        - generic [ref=e75]:
+          - text: Notes
+          - generic [ref=e76]:
+            - textbox "Add some context, links, or resources here..." [ref=e77]
+            - generic [ref=e78]:
+              - generic [ref=e79] [cursor=pointer]: attach_file
+              - generic [ref=e80] [cursor=pointer]: alternate_email
+      - generic [ref=e81]:
+        - button "Discard" [ref=e82] [cursor=pointer]
+        - button "Update Task" [ref=e83] [cursor=pointer]

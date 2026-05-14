@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OmniTodo - Create Task</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed-variant": "#7d2d00",
+                    "tertiary-fixed-dim": "#ffb596",
+                    "primary-fixed": "#dbe1ff",
+                    "secondary-container": "#fd761a",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "on-secondary": "#ffffff",
+                    "outline-variant": "#c3c6d7",
+                    "on-primary": "#ffffff",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "secondary-fixed": "#ffdbca",
+                    "on-background": "#1a1c1d",
+                    "on-tertiary-fixed": "#360f00",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f9f9fb",
+                    "secondary-fixed-dim": "#ffb690",
+                    "surface": "#f9f9fb",
+                    "outline": "#737686",
+                    "on-secondary-fixed": "#341100",
+                    "inverse-primary": "#b4c5ff",
+                    "surface-container-low": "#f3f3f5",
+                    "secondary": "#9d4300",
+                    "surface-dim": "#d9dadc",
+                    "on-secondary-container": "#5c2400",
+                    "primary-container": "#2563eb",
+                    "on-surface-variant": "#434655",
+                    "tertiary-fixed": "#ffdbcd",
+                    "tertiary-container": "#bc4800",
+                    "surface-tint": "#0053db",
+                    "surface-container-highest": "#e2e2e4",
+                    "on-surface": "#1a1c1d",
+                    "on-error": "#ffffff",
+                    "surface-container": "#edeef0",
+                    "inverse-surface": "#2f3132",
+                    "on-primary-fixed": "#00174b",
+                    "tertiary": "#943700",
+                    "on-tertiary-container": "#ffede6",
+                    "on-secondary-fixed-variant": "#783200",
+                    "surface-bright": "#f9f9fb",
+                    "on-tertiary": "#ffffff",
+                    "surface-variant": "#e2e2e4",
+                    "on-primary-container": "#eeefff",
+                    "surface-container-high": "#e8e8ea",
+                    "primary": "#004ac6",
+                    "inverse-on-surface": "#f0f0f2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased overflow-hidden">
+<!-- Background Content (Blurred) -->
+<div class="fixed inset-0 z-0 blur-xl opacity-60 pointer-events-none scale-105">
+<nav class="sticky top-0 w-full z-50 bg-[#F7F7F9]/80 backdrop-blur-xl flex justify-between items-center px-8 py-4 max-w-7xl mx-auto">
+<span class="font-['Manrope'] font-extrabold text-2xl tracking-tight text-[#1E293B]">OmniTodo</span>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-[#1E293B]/60">calendar_month</span>
+<span class="material-symbols-outlined text-[#1E293B]/60">more_vert</span>
+</div>
+</nav>
+<main class="max-w-4xl mx-auto px-8 pt-12 space-y-12">
+<header>
+<h1 class="text-6xl font-extrabold tracking-tighter text-on-surface mb-2">Today</h1>
+<p class="text-on-surface-variant font-medium">You have 8 tasks for today.</p>
+</header>
+<div class="space-y-4">
+<div class="bg-surface-container-lowest p-8 rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-6">
+<div class="w-8 h-8 rounded-full border-2 border-primary-container"></div>
+<span class="text-xl font-semibold">Morning Yoga Session</span>
+</div>
+<span class="bg-surface-container-high px-4 py-2 rounded-full text-sm font-medium">08:00 AM</span>
+</div>
+<div class="bg-surface-container-lowest p-8 rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-6">
+<div class="w-8 h-8 rounded-full border-2 border-primary-container"></div>
+<span class="text-xl font-semibold">Weekly Growth Meeting</span>
+</div>
+<span class="bg-surface-container-high px-4 py-2 rounded-full text-sm font-medium">10:30 AM</span>
+</div>
+<div class="bg-surface-container-lowest p-8 rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-6">
+<div class="w-8 h-8 rounded-full border-2 border-primary-container"></div>
+<span class="text-xl font-semibold">Design System Review</span>
+</div>
+<span class="bg-surface-container-high px-4 py-2 rounded-full text-sm font-medium">02:00 PM</span>
+</div>
+</div>
+</main>
+</div>
+<!-- Modal Overlay Backdrop -->
+<div class="fixed inset-0 bg-on-surface/10 backdrop-blur-sm z-40"></div>
+<!-- Create Task Bottom Sheet (Screen View) -->
+<div class="fixed inset-x-0 bottom-0 z-50 flex flex-col items-center">
+<div class="w-full max-w-3xl bg-surface-container-lowest rounded-t-xl shadow-[0px_-8px_24px_rgba(30,41,59,0.06)] px-8 pb-12 pt-4 flex flex-col animate-in slide-in-from-bottom-full duration-500">
+<!-- Drag Indicator -->
+<div class="w-12 h-1.5 bg-outline-variant/40 rounded-full mx-auto mb-10"></div>
+<div class="flex items-start gap-4">
+<!-- Input Area -->
+<div class="flex-grow">
+<input class="w-full bg-transparent border-none focus:ring-0 text-3xl font-bold tracking-tight text-on-surface placeholder:text-on-surface-variant/30 p-0 mb-8 font-headline" placeholder="What are you planning?" type="text" value="Design the new notification micro-interactions"/>
+<div class="flex flex-wrap gap-3">
+<!-- Contextual Micro-Chips -->
+<div class="flex items-center gap-2 bg-primary-fixed/50 px-4 py-2 rounded-full text-on-primary-fixed-variant font-semibold text-sm">
+<span class="material-symbols-outlined text-sm">calendar_today</span>
+<span>Today</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-full text-on-surface-variant font-semibold text-sm">
+<span class="material-symbols-outlined text-sm">sell</span>
+<span>Work</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-full text-on-surface-variant font-semibold text-sm">
+<span class="material-symbols-outlined text-sm">notifications_active</span>
+<span>Remind me</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-full text-on-surface-variant font-semibold text-sm">
+<span class="material-symbols-outlined text-sm">flag</span>
+<span>High Priority</span>
+</div>
+</div>
+</div>
+<!-- Active Send Action -->
+<button class="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-container text-white flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+<!-- Footer Details -->
+<div class="mt-12 flex items-center justify-between border-t border-surface-container-high pt-6">
+<div class="flex gap-6">
+<button class="text-on-surface-variant/60 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<button class="text-on-surface-variant/60 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+<button class="text-on-surface-variant/60 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">palette</span>
+</button>
+</div>
+<p class="text-xs font-label uppercase tracking-widest text-on-surface-variant/40">Press Enter to Create</p>
+</div>
+</div>
+</div>
+<!-- Hidden Bottom Nav for Layout Integrity -->
+<div class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-8 pt-4 bg-[#F7F7F9]/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0px_-8px_24px_rgba(30,41,59,0.04)] rounded-t-[2rem] opacity-0 pointer-events-none">
+<div class="flex flex-col items-center justify-center bg-[#2563EB] text-white rounded-full p-3 scale-110 -translate-y-2 shadow-lg shadow-blue-500/20">
+<span class="material-symbols-outlined">task_alt</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Tasks</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#1E293B]/40 dark:text-slate-500 p-2">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Calendar</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#1E293B]/40 dark:text-slate-500 p-2">
+<span class="material-symbols-outlined">adjust</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Focus</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#1E293B]/40 dark:text-slate-500 p-2">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Settings</span>
+</div>
+</div>
+</body></html>

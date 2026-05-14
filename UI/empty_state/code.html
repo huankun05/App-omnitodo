@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed-variant": "#7d2d00",
+                    "tertiary-fixed-dim": "#ffb596",
+                    "primary-fixed": "#dbe1ff",
+                    "secondary-container": "#fd761a",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "on-secondary": "#ffffff",
+                    "outline-variant": "#c3c6d7",
+                    "on-primary": "#ffffff",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "secondary-fixed": "#ffdbca",
+                    "on-background": "#1a1c1d",
+                    "on-tertiary-fixed": "#360f00",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f9f9fb",
+                    "secondary-fixed-dim": "#ffb690",
+                    "surface": "#f9f9fb",
+                    "outline": "#737686",
+                    "on-secondary-fixed": "#341100",
+                    "inverse-primary": "#b4c5ff",
+                    "surface-container-low": "#f3f3f5",
+                    "secondary": "#9d4300",
+                    "surface-dim": "#d9dadc",
+                    "on-secondary-container": "#5c2400",
+                    "primary-container": "#2563eb",
+                    "on-surface-variant": "#434655",
+                    "tertiary-fixed": "#ffdbcd",
+                    "tertiary-container": "#bc4800",
+                    "surface-tint": "#0053db",
+                    "surface-container-highest": "#e2e2e4",
+                    "on-surface": "#1a1c1d",
+                    "on-error": "#ffffff",
+                    "surface-container": "#edeef0",
+                    "inverse-surface": "#2f3132",
+                    "on-primary-fixed": "#00174b",
+                    "tertiary": "#943700",
+                    "on-tertiary-container": "#ffede6",
+                    "on-secondary-fixed-variant": "#783200",
+                    "surface-bright": "#f9f9fb",
+                    "on-tertiary": "#ffffff",
+                    "surface-variant": "#e2e2e4",
+                    "on-primary-container": "#eeefff",
+                    "surface-container-high": "#e8e8ea",
+                    "primary": "#004ac6",
+                    "inverse-on-surface": "#f0f0f2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            },
+            "animation": {
+              "float": "float 6s ease-in-out infinite",
+              "float-slow": "float 8s ease-in-out infinite",
+              "fade-in": "fadeIn 0.8s ease-out forwards",
+            },
+            "keyframes": {
+              "float": {
+                "0%, 100%": { transform: "translateY(0)" },
+                "50%": { transform: "translateY(-20px)" },
+              },
+              "fadeIn": {
+                "0%": { opacity: "0", transform: "translateY(10px)" },
+                "100%": { opacity: "1", transform: "translateY(0)" },
+              }
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-[#F8F9FA] text-on-surface min-h-screen flex flex-col relative overflow-hidden">
+<!-- Background Elements -->
+<div class="absolute inset-0 pointer-events-none overflow-hidden">
+<div class="absolute top-[20%] left-[15%] w-64 h-64 bg-primary-container/10 rounded-full blur-3xl animate-float"></div>
+<div class="absolute bottom-[10%] right-[10%] w-96 h-96 bg-secondary-container/5 rounded-full blur-3xl animate-float-slow"></div>
+<div class="absolute top-[40%] right-[20%] w-32 h-32 border border-primary/10 rounded-full animate-float" style="animation-delay: -2s;"></div>
+</div>
+<!-- TopNavBar -->
+<header class="sticky top-0 w-full z-50 bg-[#F7F7F9]/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-surface-container">
+<nav class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-8">
+<span class="font-['Manrope'] font-extrabold text-2xl tracking-tight text-[#1E293B] dark:text-white">OmniTodo</span>
+<div class="hidden md:flex gap-6 items-center">
+<a class="text-[#2563EB] font-bold border-b-2 border-[#2563EB] py-1" href="#">Tasks</a>
+<a class="text-[#1E293B]/60 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-3 py-1 rounded-full" href="#">Calendar</a>
+<a class="text-[#1E293B]/60 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-3 py-1 rounded-full" href="#">Focus</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center bg-surface-container-low px-4 py-2 rounded-full border-none shadow-sm">
+<span class="material-symbols-outlined text-outline mr-2 text-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-48" placeholder="Search tasks..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">calendar_month</span>
+</button>
+<button class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden ml-2 ring-2 ring-surface-container-high border-2 border-white">
+<img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9bc_U9FjDEcD1cUxOgOEgjnShnJEQNyiz8u9cEBZHE6_6rhsMcXeaiQVSi_0C67bn_nXRZQs9vEOB1Yuqj7xgCnNebxFJ-WQjAsGhkQWx_SpzVEBlTr4lq0g6ca2qux7gZt-m0zPFPDbsSD_bkpgGqYHXFPX0ZG0jAxgqVgWjzz9VRPeHH3n2SGl5vw-aKM23dGjKPXEGP-VEc3S7hTCq61PkuG9bmKdYw57yvc1ODdW-rBFttg3uBj6Ucl-lIb1YGBXCbUF5Ym4"/>
+</div>
+</div>
+</div>
+</nav>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow flex items-center justify-center p-8 relative z-10">
+<div class="max-w-md w-full flex flex-col items-center text-center animate-fade-in">
+<!-- Central Illustration Container -->
+<div class="w-72 h-72 rounded-full bg-white shadow-[0px_20px_50px_rgba(37,99,235,0.08)] flex items-center justify-center mb-10 relative group">
+<!-- Animated Rings -->
+<div class="absolute inset-0 rounded-full border-2 border-primary/5 scale-110 group-hover:scale-125 transition-transform duration-1000"></div>
+<div class="absolute inset-0 rounded-full border border-primary/10 scale-125 group-hover:scale-150 transition-transform duration-1000 opacity-50"></div>
+<!-- High-fidelity Icon -->
+<div class="w-56 h-56 rounded-full bg-gradient-to-br from-[#EEF2FF] to-white flex items-center justify-center shadow-inner relative">
+<div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.8),transparent)] rounded-full"></div>
+<div class="bg-primary p-6 rounded-3xl shadow-xl shadow-primary/20 rotate-12 transition-transform group-hover:rotate-0 duration-500">
+<span class="material-symbols-outlined text-white text-7xl select-none" style="font-variation-settings: 'FILL' 1, 'wght' 600;">check_circle</span>
+</div>
+</div>
+</div>
+<!-- Content -->
+<div class="space-y-4">
+<h1 class="font-['Manrope'] font-extrabold text-4xl md:text-5xl text-on-surface tracking-tight bg-gradient-to-b from-on-surface to-on-surface/70 bg-clip-text text-transparent">
+                All systems clear.
+            </h1>
+<p class="font-['Inter'] text-on-surface-variant text-xl max-w-xs mx-auto leading-relaxed font-medium">
+                You've conquered your day! What's next on the horizon?
+            </p>
+</div>
+<div class="mt-12 flex flex-col items-center gap-4">
+<button class="group flex items-center gap-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-8 py-4 rounded-full shadow-lg shadow-blue-500/25 active:scale-95 transition-all transform hover:-translate-y-1">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+<span class="font-['Inter'] font-semibold tracking-wide">Add a New Task</span>
+</button>
+<button class="font-['Inter'] font-medium text-primary hover:text-primary-container px-6 py-2 rounded-full transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">auto_graph</span>
+View Today's Insights
+</button>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (Alternative placement for mobile visibility) -->
+<div class="fixed bottom-32 right-8 md:bottom-12 md:right-12 z-50 md:hidden">
+<button class="bg-[#2563EB] text-white p-4 rounded-full shadow-2xl shadow-blue-500/40 active:scale-95 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+</button>
+</div>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-8 pt-4 bg-[#F7F7F9]/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-surface-container shadow-[0px_-8px_30px_rgba(0,0,0,0.03)]">
+<a class="flex flex-col items-center justify-center text-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+<span class="font-['Inter'] font-bold text-[10px] uppercase tracking-widest mt-1">Tasks</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline/60" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Calendar</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline/60" href="#">
+<span class="material-symbols-outlined">adjust</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Focus</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline/60" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

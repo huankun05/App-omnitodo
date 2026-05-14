@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]: OmniTodo
+      - button "help_outline" [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: help_outline
+  - main [ref=e8]:
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - heading "Join OmniTodo" [level=1] [ref=e12]
+        - paragraph [ref=e13]: Create an account to start curating your productivity.
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Full Name
+          - textbox "Full Name" [ref=e18]:
+            - /placeholder: Alex Rivers
+        - generic [ref=e19]:
+          - generic [ref=e20]: Email Address
+          - textbox "Email Address" [ref=e21]:
+            - /placeholder: alex@example.com
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - generic [ref=e24]: Password
+            - textbox "Password" [ref=e25]:
+              - /placeholder: ••••••••
+          - generic [ref=e26]:
+            - generic [ref=e27]: Confirm
+            - textbox "Confirm" [ref=e28]:
+              - /placeholder: ••••••••
+        - generic [ref=e29]:
+          - checkbox "I agree to the Terms and Privacy Policy" [ref=e31] [cursor=pointer]
+          - generic [ref=e32]:
+            - text: I agree to the
+            - link "Terms" [ref=e33] [cursor=pointer]:
+              - /url: "#"
+            - text: and
+            - link "Privacy Policy" [ref=e34] [cursor=pointer]:
+              - /url: "#"
+        - button "Create Account" [ref=e36] [cursor=pointer]
+        - link "Back to Login" [ref=e38] [cursor=pointer]:
+          - /url: "#"

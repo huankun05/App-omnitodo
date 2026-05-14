@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OmniTodo - Focus Session Hub</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#2563EB", // Klein Blue accent from design system
+                        "primary-container": "#DBEAFE",
+                        "on-primary-container": "#1E40AF",
+                        "surface": "#F9FAFB",
+                        "on-surface": "#111827",
+                        "surface-container": "#F3F4F6",
+                        "surface-container-low": "#FFFFFF",
+                        "outline": "#E5E7EB",
+                        "on-surface-variant": "#4B5563"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .timer-glow {
+            box-shadow: 0 0 80px -20px rgba(37, 99, 235, 0.12);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #E5E7EB;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface min-h-screen selection:bg-primary/20 selection:text-primary">
+<nav class="sticky top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-outline/50">
+<div class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+<div class="font-headline font-extrabold text-2xl tracking-tight text-on-surface">
+                OmniTodo
+            </div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors px-3 py-2" href="#">Tasks</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors px-3 py-2" href="#">Calendar</a>
+<a class="text-primary font-bold border-b-2 border-primary px-3 py-2" href="#">Focus</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors px-3 py-2" href="#">Settings</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden border border-outline">
+<img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5z9yaYfPKeibxH5g08L-LomO8xUWnk18e5yF7egi0RFGcp9b5rEdObGD2pGd-Djl5VaoFkK_HTnsVzQzQOvWj6_lbDVPpRiZKN57_dQd2MgFirap4DPjJke-TEbwVVosDG4DWlncz-ZBy2OB6uTjZ0eY1OQ8mx5OAi9UftIKZXfduo3N4jdY_BoV_838HLnL8kPyiHeW6QRgJHgfATdEw6s40GBWJN4NLGXC7tXQXffkIv746IxDMEMAAiZ2JCVjkuStZ1YFnsz8"/>
+</div>
+</div>
+</div>
+</nav>
+<main class="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+<!-- Left Column: Tasks & Stats -->
+<div class="lg:col-span-3 space-y-8 order-2 lg:order-1">
+<!-- Statistics Dashboard -->
+<section class="bg-surface-container-low rounded-lg p-6 border border-outline shadow-sm space-y-4">
+<h3 class="font-headline font-bold text-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">analytics</span>
+                    Daily Overview
+                </h3>
+<div class="grid grid-cols-1 gap-3">
+<div class="p-4 bg-surface rounded-2xl border border-outline/50">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Focus Time</p>
+<p class="text-2xl font-headline font-extrabold text-on-surface mt-1">4h 25m</p>
+</div>
+<div class="p-4 bg-surface rounded-2xl border border-outline/50">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Completed</p>
+<p class="text-2xl font-headline font-extrabold text-on-surface mt-1">12 Tasks</p>
+</div>
+</div>
+</section>
+<!-- Task Context & Selection -->
+<section class="bg-surface-container-low rounded-lg p-6 border border-outline shadow-sm space-y-4">
+<div class="flex items-center justify-between">
+<h3 class="font-headline font-bold text-lg text-on-surface">Queue</h3>
+<button class="text-primary text-sm font-semibold hover:underline">View All</button>
+</div>
+<div class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+<div class="p-4 bg-primary/5 border border-primary/20 rounded-2xl cursor-pointer">
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-bold text-primary uppercase tracking-tighter">Current</span>
+<span class="text-[10px] font-bold text-on-surface-variant">2/3 Sessions</span>
+</div>
+<p class="font-bold text-sm text-on-surface">Design System Docs</p>
+<div class="w-full bg-primary/10 h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-primary h-full w-[66%]"></div>
+</div>
+</div>
+<div class="p-4 bg-surface border border-outline/50 rounded-2xl hover:border-primary/30 transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Next</span>
+<span class="text-[10px] font-bold text-on-surface-variant">Est: 2 Sessions</span>
+</div>
+<p class="font-bold text-sm text-on-surface group-hover:text-primary transition-colors">API Integration</p>
+</div>
+<div class="p-4 bg-surface border border-outline/50 rounded-2xl hover:border-primary/30 transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Upcoming</span>
+<span class="text-[10px] font-bold text-on-surface-variant">Est: 1 Session</span>
+</div>
+<p class="font-bold text-sm text-on-surface group-hover:text-primary transition-colors">Client Briefing</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Center Column: Hero Timer -->
+<div class="lg:col-span-6 flex flex-col items-center justify-center space-y-12 order-1 lg:order-2">
+<div class="text-center space-y-3">
+<span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 text-primary font-bold text-xs tracking-widest uppercase font-label">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+                    Deep Focus Mode
+                </span>
+<h1 class="text-5xl md:text-6xl font-headline font-extrabold tracking-tight text-on-surface">
+                    Stay present.
+                </h1>
+</div>
+<!-- Hero Timer Circle -->
+<div class="relative flex items-center justify-center group">
+<div class="absolute inset-0 bg-primary/5 rounded-full blur-[100px] scale-125 -z-10 transition-all duration-1000 group-hover:bg-primary/10"></div>
+<div class="relative w-72 h-72 md:w-[480px] md:h-[480px] rounded-full bg-surface-container-low timer-glow flex flex-col items-center justify-center border-[16px] border-surface-container shadow-2xl">
+<svg class="absolute inset-[-16px] w-[calc(100%+32px)] h-[calc(100%+32px)] -rotate-90 pointer-events-none" viewbox="0 0 100 100">
+<circle class="text-primary/5" cx="50" cy="50" fill="none" r="47" stroke="currentColor" stroke-width="3"></circle>
+<circle class="text-primary transition-all duration-1000 ease-linear shadow-lg" cx="50" cy="50" fill="none" r="47" stroke="currentColor" stroke-dasharray="295" stroke-dashoffset="73" stroke-linecap="round" stroke-width="3"></circle>
+</svg>
+<div class="flex flex-col items-center">
+<div class="text-[80px] md:text-[130px] font-headline font-extrabold text-on-surface tabular-nums tracking-tighter leading-none">
+                            25:00
+                        </div>
+<div class="text-on-surface-variant font-bold tracking-[0.2em] uppercase text-[10px] md:text-xs mt-4">
+                            Minutes Remaining
+                        </div>
+</div>
+</div>
+</div>
+<!-- Primary Controls -->
+<div class="flex flex-wrap items-center justify-center gap-6">
+<button class="group relative px-12 py-5 bg-primary text-white rounded-full font-bold text-lg shadow-xl shadow-primary/25 hover:scale-105 active:scale-95 transition-all">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                        Start Session
+                    </div>
+</button>
+<button class="px-8 py-5 bg-surface-container text-on-surface font-bold text-lg rounded-full hover:bg-outline active:scale-95 transition-all">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">pause</span>
+                        Pause
+                    </div>
+</button>
+<button class="w-14 h-14 flex items-center justify-center bg-surface-container text-on-surface-variant rounded-full hover:bg-outline active:rotate-180 transition-all duration-500">
+<span class="material-symbols-outlined">refresh</span>
+</button>
+</div>
+</div>
+<!-- Right Column: Timer Configuration -->
+<div class="lg:col-span-3 space-y-8 order-3">
+<section class="bg-surface-container-low rounded-lg p-6 border border-outline shadow-sm space-y-8">
+<h3 class="font-headline font-bold text-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">settings_suggest</span>
+                    Configuration
+                </h3>
+<!-- Mode Switcher -->
+<div class="space-y-3">
+<label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Timer Mode</label>
+<div class="grid grid-cols-1 gap-2">
+<button class="w-full py-3 px-4 bg-primary text-white rounded-2xl font-bold text-sm flex items-center justify-between">
+                            Pomodoro
+                            <span class="material-symbols-outlined text-sm">check_circle</span>
+</button>
+<button class="w-full py-3 px-4 bg-surface border border-outline/50 text-on-surface-variant rounded-2xl font-bold text-sm text-left hover:border-primary/30 transition-colors">
+                            Stopwatch
+                        </button>
+<button class="w-full py-3 px-4 bg-surface border border-outline/50 text-on-surface-variant rounded-2xl font-bold text-sm text-left hover:border-primary/30 transition-colors">
+                            Countdown
+                        </button>
+</div>
+</div>
+<!-- Duration Slider/Presets -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Duration</label>
+<span class="text-sm font-bold text-primary">25m</span>
+</div>
+<input class="w-full h-1.5 bg-surface-container rounded-lg appearance-none cursor-pointer accent-primary" max="120" min="5" step="5" type="range" value="25"/>
+<div class="flex justify-between gap-2">
+<button class="flex-1 py-2 text-xs font-bold bg-surface border border-outline/50 rounded-xl hover:bg-primary hover:text-white hover:border-primary transition-all">25</button>
+<button class="flex-1 py-2 text-xs font-bold bg-surface border border-outline/50 rounded-xl hover:bg-primary hover:text-white hover:border-primary transition-all">45</button>
+<button class="flex-1 py-2 text-xs font-bold bg-surface border border-outline/50 rounded-xl hover:bg-primary hover:text-white hover:border-primary transition-all">60</button>
+</div>
+</div>
+<!-- Settings Toggles -->
+<div class="space-y-4 pt-4 border-t border-outline">
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-on-surface">Auto-start Breaks</span>
+<div class="w-10 h-6 bg-primary rounded-full relative p-1 cursor-pointer">
+<div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-on-surface">Mute Notifications</span>
+<div class="w-10 h-6 bg-surface-container rounded-full relative p-1 cursor-pointer">
+<div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Mobile Navigation -->
+<div class="md:hidden">
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-8 pt-4 bg-white/90 backdrop-blur-xl border-t border-outline rounded-t-[2rem]">
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 p-2" href="#">
+<span class="material-symbols-outlined">task_alt</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 p-2" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary text-white rounded-full p-3 scale-110 -translate-y-2 shadow-lg shadow-primary/20" href="#">
+<span class="material-symbols-outlined">adjust</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 p-2" href="#">
+<span class="material-symbols-outlined">settings</span>
+</a>
+</nav>
+</div>
+</body></html>
