@@ -235,20 +235,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     }
   }
 
-  String _getMonthDayDiff() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final selected = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final diff = selected.difference(today).inDays;
-    if (diff == 0) {
-      return 'Today';
-    } else if (diff > 0) {
-      return '$diff days ahead';
-    } else {
-      return '${-diff} days ago';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final tasksAsync = ref.watch(taskNotifierProvider);
@@ -327,17 +313,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildCalendarSection(Map<String, List<Task>> tasksByDate) {
+    final monthTaskCount = tasksByDate.values.fold<int>(0, (sum, list) => sum + list.length);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCalendarHeader(),
+        _buildCalendarHeader(monthTaskCount),
         const SizedBox(height: 32),
         _buildCalendarCard(tasksByDate),
       ],
     );
   }
 
-  Widget _buildCalendarHeader() {
+  Widget _buildCalendarHeader(int monthTaskCount) {
+    final subtitle = monthTaskCount == 0
+        ? 'No tasks scheduled this month.'
+        : '$monthTaskCount ${monthTaskCount == 1 ? 'task' : 'tasks'} scheduled this month.';
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -345,37 +336,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  DateFormat('MMMM').format(_focusedMonth),
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 42,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.onSurface,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                if (_getMonthDayDiff() != 'Today') ...[
-                  const SizedBox(width: 10),
-                  Text(
-                    _getMonthDayDiff(),
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.outline,
-                    ),
-                  ),
-                ],
-              ],
+            Text(
+              DateFormat('MMMM').format(_focusedMonth),
+              style: const TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 42,
+                fontWeight: FontWeight.w800,
+                color: AppColors.onSurface,
+                letterSpacing: -0.5,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Curating your most productive month.',
+              subtitle,
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 16,
@@ -581,15 +554,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     List<Task> afternoonTasks,
     List<Task> eveningTasks,
   ) {
+    final dateLabel = isToday ? 'Today' : DateFormat('EEEE').format(_selectedDate);
+    final dateBadge = '${_selectedDate.day} ${DateFormat('MMM').format(_selectedDate)}';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 标题栏 —— 无背景色
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              isToday ? "Today's Focus" : 'Selected Day',
+              dateLabel,
               style: const TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 22,
@@ -604,7 +579,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '${_selectedDate.day} ${DateFormat('MMM').format(_selectedDate)}',
+                dateBadge,
                 style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 11,
@@ -770,7 +745,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.secondaryContainer.withValues(alpha: 0.15),
+                    color: AppColors.primaryContainer.withValues(alpha: 0.15),
                   ),
                 ),
               ),
@@ -1128,8 +1103,8 @@ class _TaskDots extends StatelessWidget {
     return Row(
       children: [
         ...colors.map((color) => Container(
-              width: compact ? 3 : 4,
-              height: compact ? 3 : 4,
+              width: compact ? 5 : 6,
+              height: compact ? 5 : 6,
               margin: const EdgeInsets.only(right: 3),
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             )),
