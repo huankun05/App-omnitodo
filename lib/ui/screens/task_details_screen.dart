@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../data/providers/task_provider.dart';
+import '../../data/providers/tag_provider.dart';
 import '../../data/models/task_models.dart';
 import '../widgets/responsive_navigation.dart';
+import '../widgets/manage_tags_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 可编辑子任务行的本地状态模型
@@ -28,8 +30,9 @@ class _SubTaskRow {
 // ─────────────────────────────────────────────────────────────────────────────
 class TaskDetailsScreen extends ConsumerStatefulWidget {
   final String taskId;
+  final String? initialDate;
 
-  const TaskDetailsScreen({super.key, required this.taskId});
+  const TaskDetailsScreen({super.key, required this.taskId, this.initialDate});
 
   @override
   ConsumerState<TaskDetailsScreen> createState() => _TaskDetailsScreenState();
@@ -75,15 +78,6 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen>
   static const _outlineVariant = Color(0xFFC3C6D7);
   static const _background = Color(0xFFF9F9FB);
 
-  static final List<String> _allTags = [
-    'Work',
-    'Personal',
-    'Health',
-    'Urgent',
-    'Study',
-    'Finance',
-  ];
-
   // ─────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -113,13 +107,15 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen>
   Future<void> _loadTask() async {
     try {
       if (_isNewTask) {
-        // 新建任务模式：初始化空状态
+        // 新建任务模式：初始化空状态，支持从路由接收初始日期
+        final initialDate = widget.initialDate;
         setState(() {
           _titleController.text = '';
           _notesController.text = '';
           _selectedPriority = 'medium';
           _selectedTags.clear();
-          _selectedDueDate = null;
+          _selectedDueDate =
+              initialDate != null ? DateTime.tryParse(initialDate) : null;
         });
       } else {
         // 编辑已有任务模式
@@ -1277,17 +1273,7 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen>
   }
 
   Widget _tagChip(String tag, {required bool selected}) {
-    // 颜色循环
-    final colors = [
-      const Color(0xFF2563EB),
-      const Color(0xFF9D4300),
-      const Color(0xFF943700),
-      const Color(0xFF006874),
-      const Color(0xFF6750A4),
-      const Color(0xFF00696D),
-    ];
-    final idx = _allTags.indexOf(tag) % colors.length;
-    final color = colors[idx < 0 ? 0 : idx];
+    final color = ref.read(tagProviderProvider.notifier).colorForTag(tag);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1326,143 +1312,161 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Select Tags',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Manrope',
-                ),
-              ),
-              const SizedBox(height: 16),
-              // 自定义标签输入行
-              Row(
+        builder: (ctx, setModalState) => Consumer(
+          builder: (ctx, ref, _) {
+            final tagProv = ref.watch(tagProviderProvider);
+            final allTagNames = tagProv.allTags.map((t) => t.name).toList();
+            final visibleTagNames = tagProv.visibleTags.map((t) => t.name).toList();
+            return Padding(
+              padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: customController,
-                      style: const TextStyle(fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Custom tag...',
-                        hintStyle: const TextStyle(fontSize: 14, color: _outlineVariant),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(9999),
-                          borderSide: const BorderSide(color: _outlineVariant),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Select Tags',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Manrope',
+                          ),
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(9999),
-                          borderSide: const BorderSide(color: _outlineVariant),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(9999),
-                          borderSide: const BorderSide(color: _primaryBlue),
-                        ),
-                        isDense: true,
                       ),
-                      onSubmitted: (v) {
-                        final name = v.trim();
-                        if (name.isNotEmpty && !_selectedTags.contains(name)) {
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ManageTagsDialog.show(context);
+                        },
+                        icon: const Icon(Icons.tune_rounded, size: 16),
+                        label: const Text('Manage'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: customController,
+                          style: const TextStyle(fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Custom tag...',
+                            hintStyle: const TextStyle(fontSize: 14, color: _outlineVariant),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(9999),
+                              borderSide: const BorderSide(color: _outlineVariant),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(9999),
+                              borderSide: const BorderSide(color: _outlineVariant),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(9999),
+                              borderSide: const BorderSide(color: _primaryBlue),
+                            ),
+                            isDense: true,
+                          ),
+                          onSubmitted: (v) {
+                            final name = v.trim();
+                            if (name.isNotEmpty && !_selectedTags.contains(name)) {
+                              ref.read(tagProviderProvider.notifier).addTag(name);
+                              setModalState(() {
+                                _selectedTags.add(name);
+                              });
+                              setState(() {});
+                              customController.clear();
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _PressScale(
+                        scaleTo: 0.85,
+                        onTap: () {
+                          final name = customController.text.trim();
+                          if (name.isNotEmpty && !_selectedTags.contains(name)) {
+                            ref.read(tagProviderProvider.notifier).addTag(name);
+                            setModalState(() {
+                              _selectedTags.add(name);
+                            });
+                            setState(() {});
+                            customController.clear();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: _primaryBlue,
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      ...visibleTagNames,
+                      ..._selectedTags.where((t) => !allTagNames.contains(t)),
+                    ].map((tag) {
+                      final isSelected = _selectedTags.contains(tag);
+                      return _PressScale(
+                        onTap: () {
                           setModalState(() {
-                            _selectedTags.add(name);
-                            if (!_allTags.contains(name)) _allTags.add(name);
+                            if (isSelected) {
+                              _selectedTags.remove(tag);
+                            } else {
+                              _selectedTags.add(tag);
+                            }
                           });
                           setState(() {});
-                          customController.clear();
-                        }
-                      },
-                    ),
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? _primaryBlue : _surfaceLow,
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? Colors.white : _onSurface,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                  const SizedBox(width: 8),
-                  _PressScale(
-                    scaleTo: 0.85,
-                    onTap: () {
-                      final name = customController.text.trim();
-                      if (name.isNotEmpty && !_selectedTags.contains(name)) {
-                        setModalState(() {
-                          _selectedTags.add(name);
-                          if (!_allTags.contains(name)) _allTags.add(name);
-                        });
-                        setState(() {});
-                        customController.clear();
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: _primaryBlue,
-                        borderRadius: BorderRadius.circular(9999),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      child: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                      child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  ..._allTags,
-                  ..._selectedTags.where((t) => !_allTags.contains(t)),
-                ].map((tag) {
-                  final isSelected = _selectedTags.contains(tag);
-                  return _PressScale(
-                    onTap: () {
-                      setModalState(() {
-                        if (isSelected) {
-                          _selectedTags.remove(tag);
-                        } else {
-                          _selectedTags.add(tag);
-                        }
-                      });
-                      setState(() {});
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? _primaryBlue : _surfaceLow,
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                      child: Text(
-                        tag,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : _onSurface,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text('Done',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

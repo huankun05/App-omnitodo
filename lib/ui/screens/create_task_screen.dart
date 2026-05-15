@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/providers/task_provider.dart';
 import '../../data/providers/project_provider.dart';
+import '../../data/providers/tag_provider.dart';
 import '../../data/models/task_models.dart';
 import '../../data/models/project_models.dart';
 import '../../core/providers/theme_provider.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/manage_tags_dialog.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
   final String? mode;
@@ -47,17 +49,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
   late Animation<double> _fadeAnimation;
 
   // ── 标签系统 ─────────────────────────────────────────────
-  final List<_TagDefinition> _allTagDefs = [
-    const _TagDefinition(name: 'Today', icon: Icons.calendar_today, isDefault: true),
-    const _TagDefinition(name: 'Work', icon: Icons.sell, isDefault: true),
-    const _TagDefinition(name: 'Remind me', icon: Icons.notifications_active, isDefault: true),
-    const _TagDefinition(name: 'High Priority', icon: Icons.flag, isDefault: true),
-  ];
-  final Set<String> _hiddenTagNames = {};
   final Set<String> _activeTags = {'Work'};
-
-  List<_TagDefinition> get _visibleTagDefs =>
-      _allTagDefs.where((t) => !_hiddenTagNames.contains(t.name)).toList();
 
   // 优先级选择
   String _selectedPriority = 'medium';
@@ -142,11 +134,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
   void _selectPriority(String priority) {
     setState(() {
       _selectedPriority = priority;
-      if (priority == 'high') {
-        _activeTags.add('High Priority');
-      } else {
-        _activeTags.remove('High Priority');
-      }
     });
   }
 
@@ -165,11 +152,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
           ),
           onSubmitted: (value) {
             final name = value.trim();
-            if (name.isNotEmpty && !_allTagDefs.any((t) => t.name == name)) {
-              setState(() {
-                _allTagDefs.add(_TagDefinition(name: name, icon: Icons.label));
-                _activeTags.add(name);
-              });
+            if (name.isNotEmpty) {
+              ref.read(tagProviderProvider.notifier).addTag(name);
+              setState(() => _activeTags.add(name));
             }
             Navigator.pop(ctx);
           },
@@ -182,11 +167,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
           TextButton(
             onPressed: () {
               final name = controller.text.trim();
-              if (name.isNotEmpty && !_allTagDefs.any((t) => t.name == name)) {
-                setState(() {
-                  _allTagDefs.add(_TagDefinition(name: name, icon: Icons.label));
-                  _activeTags.add(name);
-                });
+              if (name.isNotEmpty) {
+                ref.read(tagProviderProvider.notifier).addTag(name);
+                setState(() => _activeTags.add(name));
               }
               Navigator.pop(ctx);
             },
@@ -197,82 +180,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
     );
   }
 
-  void _hideTag(String tag) {
-    setState(() {
-      _hiddenTagNames.add(tag);
-      _activeTags.remove(tag);
-    });
-  }
-
-  void _showManageTagsDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Manage Tags'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _allTagDefs.length,
-              itemBuilder: (_, index) {
-                final def = _allTagDefs[index];
-                final isVisible = !_hiddenTagNames.contains(def.name);
-                return SwitchListTile(
-                  title: Row(
-                    children: [
-                      Icon(def.icon, size: 18),
-                      const SizedBox(width: 8),
-                      Text(def.name),
-                    ],
-                  ),
-                  value: isVisible,
-                  onChanged: (v) {
-                    setState(() {
-                      if (v) {
-                        _hiddenTagNames.remove(def.name);
-                      } else {
-                        _hiddenTagNames.add(def.name);
-                        _activeTags.remove(def.name);
-                      }
-                    });
-                    setDialogState(() {});
-                  },
-                  secondary: def.isDefault
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFBA1A1A)),
-                          onPressed: () {
-                            setState(() {
-                              _allTagDefs.removeAt(index);
-                              _hiddenTagNames.remove(def.name);
-                              _activeTags.remove(def.name);
-                            });
-                            setDialogState(() {});
-                          },
-                        ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Done'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _formatLocalDate(DateTime date) {
-    final d = DateTime(date.year, date.month, date.day);
-    final offset = d.timeZoneOffset;
-    final sign = offset.isNegative ? '-' : '+';
-    final hours = offset.inHours.abs().toString().padLeft(2, '0');
-    final minutes = (offset.inMinutes % 60).abs().toString().padLeft(2, '0');
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}T00:00:00.000$sign$hours:$minutes';
+    final d = date.toLocal();
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
   void _createTask() async {
@@ -290,10 +200,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
       await ref.read(taskServiceProvider.future);
 
       // 根据选中的标签确定 category 和 priority
-      String category = 'work';
+      final category = _activeTags.isNotEmpty ? _activeTags.join('|') : 'work';
       String priority = _selectedPriority;
 
-      if (_activeTags.contains('Work')) category = 'work';
       if (_activeTags.contains('Today') && _dueDate == null) {
         _dueDate = DateTime.now();
       }
@@ -572,46 +481,51 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                     const SizedBox(height: 32),
 
                     // 上下文微芯片 + 项目选择器（带选中动画）
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        ..._visibleTagDefs.map((def) {
-                          return _AnimatedChip(
-                            icon: def.icon,
-                            label: def.name,
-                            isSelected: _activeTags.contains(def.name),
-                            onTap: () => _toggleTag(def.name),
-                            onLongPress: () => _hideTag(def.name),
-                          );
-                        }),
-                        // 添加标签按钮
-                        GestureDetector(
-                          onTap: _addCustomTag,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(9999),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final tagProv = ref.watch(tagProviderProvider);
+                        final visibleTags = tagProv.visibleTags;
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            ...visibleTags.map((tag) {
+                              return _AnimatedChip(
+                                icon: Icons.label_rounded,
+                                label: tag.name,
+                                isSelected: _activeTags.contains(tag.name),
+                                onTap: () => _toggleTag(tag.name),
+                              );
+                            }),
+                            // 添加标签按钮
+                            GestureDetector(
+                              onTap: _addCustomTag,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: const Icon(Icons.add, size: 16, color: Color(0xff434655)),
+                              ),
                             ),
-                            child: const Icon(Icons.add, size: 16, color: Color(0xff434655)),
-                          ),
-                        ),
-                        // 管理标签按钮
-                        GestureDetector(
-                          onTap: _showManageTagsDialog,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(9999),
+                            // 管理标签按钮
+                            GestureDetector(
+                              onTap: () => ManageTagsDialog.show(context),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
+                              ),
                             ),
-                            child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
-                          ),
-                        ),
-                        // 项目选择器
-                        _buildProjectSelector(),
-                      ],
+                            // 项目选择器
+                            _buildProjectSelector(),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -636,8 +550,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
               // 详情编辑按钮
               IconButton(
                 onPressed: () {
+                  final dateParam = _dueDate != null ? '?date=${_formatLocalDate(_dueDate!)}' : '';
                   Navigator.of(context).pop();
-                  context.go('/task-details/new');
+                  context.go('/task-details/new$dateParam');
                 },
                 icon: const Icon(Icons.edit_note),
                 color: const Color(0xff434655).withValues(alpha: 0.6),
@@ -918,46 +833,51 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                                   const SizedBox(height: 32),
 
                                   // 上下文微芯片 + 项目选择器（带选中动画）
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 12,
-                                    children: [
-                                      ..._visibleTagDefs.map((def) {
-                                        return _AnimatedChip(
-                                          icon: def.icon,
-                                          label: def.name,
-                                          isSelected: _activeTags.contains(def.name),
-                                          onTap: () => _toggleTag(def.name),
-                                          onLongPress: () => _hideTag(def.name),
-                                        );
-                                      }),
-                                      // 添加标签按钮
-                                      GestureDetector(
-                                        onTap: _addCustomTag,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.surfaceContainerHigh,
-                                            borderRadius: BorderRadius.circular(9999),
+                                  Consumer(
+                                    builder: (context, ref, _) {
+                                      final tagProv = ref.watch(tagProviderProvider);
+                                      final visibleTags = tagProv.visibleTags;
+                                      return Wrap(
+                                        spacing: 12,
+                                        runSpacing: 12,
+                                        children: [
+                                          ...visibleTags.map((tag) {
+                                            return _AnimatedChip(
+                                              icon: Icons.label_rounded,
+                                              label: tag.name,
+                                              isSelected: _activeTags.contains(tag.name),
+                                              onTap: () => _toggleTag(tag.name),
+                                            );
+                                          }),
+                                          // 添加标签按钮
+                                          GestureDetector(
+                                            onTap: _addCustomTag,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.surfaceContainerHigh,
+                                                borderRadius: BorderRadius.circular(9999),
+                                              ),
+                                              child: const Icon(Icons.add, size: 16, color: Color(0xff434655)),
+                                            ),
                                           ),
-                                          child: const Icon(Icons.add, size: 16, color: Color(0xff434655)),
-                                        ),
-                                      ),
-                                      // 管理标签按钮
-                                      GestureDetector(
-                                        onTap: _showManageTagsDialog,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.surfaceContainerHigh,
-                                            borderRadius: BorderRadius.circular(9999),
+                                          // 管理标签按钮
+                                          GestureDetector(
+                                            onTap: () => ManageTagsDialog.show(context),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.surfaceContainerHigh,
+                                                borderRadius: BorderRadius.circular(9999),
+                                              ),
+                                              child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
+                                            ),
                                           ),
-                                          child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
-                                        ),
-                                      ),
-                                      // 项目选择器
-                                      _buildProjectSelector(),
-                                    ],
+                                          // 项目选择器
+                                          _buildProjectSelector(),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
@@ -982,7 +902,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                             // 详情编辑按钮
                             IconButton(
                               onPressed: () {
-                                context.go('/task-details/new');
+                                final dateParam = _dueDate != null ? '?date=${_formatLocalDate(_dueDate!)}' : '';
+                                context.go('/task-details/new$dateParam');
                               },
                               icon: const Icon(Icons.edit_note),
                               color: const Color(0xff434655).withValues(alpha: 0.6),
@@ -1500,49 +1421,55 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: _visibleTagDefs.map((def) {
-                                        final isSelected = _activeTags.contains(def.name);
-                                        return GestureDetector(
-                                          onTap: () => _toggleTag(def.name),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 200),
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: isSelected ? const Color(0xFF004AC6) : Colors.white,
-                                              borderRadius: BorderRadius.circular(9999),
-                                              boxShadow: isSelected ? [
-                                                BoxShadow(
-                                                  color: const Color(0xFF004AC6).withAlpha(51),
-                                                  blurRadius: 8,
-                                                  offset: const Offset(0, 2),
+                                    Consumer(
+                                      builder: (context, ref, _) {
+                                        final tagProv = ref.watch(tagProviderProvider);
+                                        final visibleTags = tagProv.visibleTags;
+                                        return Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: visibleTags.map((tag) {
+                                            final isSelected = _activeTags.contains(tag.name);
+                                            return GestureDetector(
+                                              onTap: () => _toggleTag(tag.name),
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 200),
+                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: isSelected ? const Color(0xFF004AC6) : Colors.white,
+                                                  borderRadius: BorderRadius.circular(9999),
+                                                  boxShadow: isSelected ? [
+                                                    BoxShadow(
+                                                      color: const Color(0xFF004AC6).withAlpha(51),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ] : null,
                                                 ),
-                                              ] : null,
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  def.icon,
-                                                  size: 14,
-                                                  color: isSelected ? Colors.white : const Color(0xFF434655),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.label_rounded,
+                                                      size: 14,
+                                                      color: Color(0xFF434655),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      tag.name,
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: isSelected ? Colors.white : const Color(0xFF434655),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  def.name,
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: isSelected ? Colors.white : const Color(0xFF434655),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
+                                              ),
+                                            );
+                                          }).toList(),
                                         );
-                                      }).toList(),
+                                      },
                                     ),
                                     const SizedBox(height: 24),
                                     const Text(
@@ -2141,19 +2068,6 @@ class _AnimatedTextFieldState extends State<_AnimatedTextField>
       },
     );
   }
-}
-
-// ============ 标签定义 ============
-class _TagDefinition {
-  final String name;
-  final IconData icon;
-  final bool isDefault;
-
-  const _TagDefinition({
-    required this.name,
-    required this.icon,
-    this.isDefault = false,
-  });
 }
 
 // ============ 带动画的上下文芯片 ============

@@ -160,7 +160,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/task-details/:id',
-        builder: (context, state) => TaskDetailsScreen(taskId: state.pathParameters['id']!),
+        builder: (context, state) => TaskDetailsScreen(
+          taskId: state.pathParameters['id']!,
+          initialDate: state.uri.queryParameters['date'],
+        ),
       ),
       GoRoute(
         path: '/insights',

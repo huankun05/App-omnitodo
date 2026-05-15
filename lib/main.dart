@@ -9,6 +9,7 @@ import 'core/router.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/l10n/app_localizations.dart';
+import 'data/providers/tag_provider.dart';
 
 // 条件导入 sqflite_ffi（仅非 Web 平台）
 import 'core/database/database_helper.dart' as db_helper;
@@ -35,10 +36,14 @@ Future<void> main() async {
     return true;
   };
 
+  final tagProvider = TagProvider();
+  await tagProvider.load();
+
   runApp(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWith((ref) async => sharedPreferences),
+        tagProviderProvider.overrideWith((ref) => tagProvider),
       ],
       child: const MyApp(),
     ),

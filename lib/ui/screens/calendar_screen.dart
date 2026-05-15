@@ -186,21 +186,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void _initTaskOrder(List<Task> allTasks) {
     final selectedDateTasks = _getTasksForDate(allTasks, _selectedDate);
     final incomplete = selectedDateTasks.where((t) => !t.isCompleted).toList();
-    _morningTasks = incomplete.where((t) {
-      if (t.dueDate == null) return false;
+    _morningTasks = [];
+    _afternoonTasks = [];
+    _eveningTasks = [];
+    for (final t in incomplete) {
+      if (t.dueDate == null) {
+        _morningTasks.add(t);
+        continue;
+      }
+      final hasTime = t.dueDate!.contains('T');
+      if (!hasTime) {
+        _morningTasks.add(t);
+        continue;
+      }
       final d = DateTime.tryParse(t.dueDate!);
-      return d != null && d.hour < 12;
-    }).toList();
-    _afternoonTasks = incomplete.where((t) {
-      if (t.dueDate == null) return false;
-      final d = DateTime.tryParse(t.dueDate!);
-      return d != null && d.hour >= 12 && d.hour < 17;
-    }).toList();
-    _eveningTasks = incomplete.where((t) {
-      if (t.dueDate == null) return false;
-      final d = DateTime.tryParse(t.dueDate!);
-      return d != null && d.hour >= 17;
-    }).toList();
+      if (d == null) {
+        _morningTasks.add(t);
+        continue;
+      }
+      if (d.hour < 12) {
+        _morningTasks.add(t);
+      } else if (d.hour < 17) {
+        _afternoonTasks.add(t);
+      } else {
+        _eveningTasks.add(t);
+      }
+    }
   }
 
   void _reorderTasks(String block, int oldIndex, int newIndex) {
@@ -1326,11 +1337,11 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
-    final hasTime = task.dueDate != null;
+    final hasTime = task.dueDate != null && task.dueDate!.contains('T');
     final time = hasTime
         ? DateFormat('HH:mm').format(DateTime.parse(task.dueDate!))
         : null;
-    final isMeeting = task.category.toLowerCase() == 'meeting';
+    final isMeeting = task.category.toLowerCase().split('|').contains('meeting');
 
     return MouseRegion(
       onEnter: (_) => _onHover(true),
@@ -1440,10 +1451,10 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
                           spacing: 6,
                           runSpacing: 4,
                           children: [
-                            _Tag(
-                                task.category.isEmpty
-                                    ? 'Internal'
-                                    : _cap(task.category)),
+                            ...task.category
+                                .split('|')
+                                .where((t) => t.trim().isNotEmpty)
+                                .map((t) => _Tag(_cap(t.trim()))),
                             if (task.priority != 'low') _Tag(_cap(task.priority)),
                           ],
                         ),
