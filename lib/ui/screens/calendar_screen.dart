@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -170,31 +169,57 @@ class CalendarScreen extends ConsumerStatefulWidget {
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _CalendarScreenState extends ConsumerState<CalendarScreen>
-    with SingleTickerProviderStateMixin {
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   final _searchController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedMonth = DateTime.now();
-  late AnimationController _fabAnimationController;
-  late Animation<double> _fabScaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _fabAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-    );
-    _fabScaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _fabAnimationController, curve: Curves.easeInOut),
-    );
-  }
+  List<Task> _morningTasks = [];
+  List<Task> _afternoonTasks = [];
+  List<Task> _eveningTasks = [];
 
   @override
   void dispose() {
     _searchController.dispose();
-    _fabAnimationController.dispose();
     super.dispose();
+  }
+
+  void _initTaskOrder(List<Task> allTasks) {
+    final selectedDateTasks = _getTasksForDate(allTasks, _selectedDate);
+    final incomplete = selectedDateTasks.where((t) => !t.isCompleted).toList();
+    _morningTasks = incomplete.where((t) {
+      if (t.dueDate == null) return false;
+      final d = DateTime.tryParse(t.dueDate!);
+      return d != null && d.hour < 12;
+    }).toList();
+    _afternoonTasks = incomplete.where((t) {
+      if (t.dueDate == null) return false;
+      final d = DateTime.tryParse(t.dueDate!);
+      return d != null && d.hour >= 12 && d.hour < 17;
+    }).toList();
+    _eveningTasks = incomplete.where((t) {
+      if (t.dueDate == null) return false;
+      final d = DateTime.tryParse(t.dueDate!);
+      return d != null && d.hour >= 17;
+    }).toList();
+  }
+
+  void _reorderTasks(String block, int oldIndex, int newIndex) {
+    setState(() {
+      List<Task> list;
+      switch (block) {
+        case 'morning':
+          list = _morningTasks;
+          break;
+        case 'afternoon':
+          list = _afternoonTasks;
+          break;
+        default:
+          list = _eveningTasks;
+      }
+      if (oldIndex < newIndex) newIndex--;
+      final item = list.removeAt(oldIndex);
+      list.insert(newIndex, item);
+    });
   }
 
   List<Task> _getTasksForDate(List<Task> tasks, DateTime date) {
@@ -245,16 +270,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       currentPage: 'calendar',
       searchController: _searchController,
       onSearchChanged: (value) {},
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: AppBackground(
-          child: tasksAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(child: Text('Error: $error')),
-            data: (tasks) => _buildContent(tasks, isLargeDesktop),
-          ),
+      child: AppBackground(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Content — Align gives it unbounded height for scrolling
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: tasksAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (error, stack) => Center(child: Text('Error: $error')),
+                    data: (tasks) => _buildContent(tasks, isLargeDesktop),
+                  ),
+                ),
+                // FAB — fixed at viewport bottom-right
+                Positioned(
+                  right: 48,
+                  bottom: 48,
+                  child: _buildFAB(),
+                ),
+              ],
+            );
+          },
         ),
-        floatingActionButton: _buildFAB(),
       ),
     );
   }
@@ -266,7 +306,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           constraints: const BoxConstraints(maxWidth: 1600),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: isLargeDesktop ? 64 : 32,
+              horizontal: isLargeDesktop ? 48 : 32,
               vertical: 48,
             ),
             child: isLargeDesktop
@@ -279,30 +319,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   }
 
   Widget _buildDesktopLayout(List<Task> tasks) {
+    _initTaskOrder(tasks);
     final tasksByDate = _groupTasksByDate(tasks, _focusedMonth);
-    final selectedDateTasks = _getTasksForDate(tasks, _selectedDate);
-    final incomplete =
-        selectedDateTasks.where((t) => !t.isCompleted).toList();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(flex: 8, child: _buildCalendarSection(tasksByDate)),
         const SizedBox(width: 48),
-        Expanded(flex: 4, child: _buildSidebarSection(incomplete)),
+        Expanded(
+          flex: 4,
+          child: _buildSidebarSection(),
+        ),
       ],
     );
   }
 
   Widget _buildMobileLayout(List<Task> tasks) {
+    _initTaskOrder(tasks);
     final tasksByDate = _groupTasksByDate(tasks, _focusedMonth);
-    final selectedDateTasks = _getTasksForDate(tasks, _selectedDate);
-    final incomplete =
-        selectedDateTasks.where((t) => !t.isCompleted).toList();
     return Column(
       children: [
         _buildCalendarSection(tasksByDate),
         const SizedBox(height: 32),
-        _buildSidebarSection(incomplete),
+        _buildSidebarSection(),
         const SizedBox(height: 120),
       ],
     );
@@ -401,7 +440,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
 
   Widget _buildCalendarCard(Map<String, List<Task>> tasksByDate) {
     return Container(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(28),
@@ -482,7 +521,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         cells.add(
           Expanded(
             child: SizedBox(
-              height: needsSixRows ? 90 : 112,
+              height: needsSixRows ? 100 : 128,
               child: _DayCell(
                 date: date,
                 isCurrentMonth: isCurrentMonth,
@@ -519,43 +558,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   // 侧边栏
   // ═══════════════════════════════════════════════════════════
 
-  Widget _buildSidebarSection(List<Task> incomplete) {
-    final morningTasks = incomplete.where((t) {
-      if (t.dueDate == null) return false;
-      final d = DateTime.tryParse(t.dueDate!);
-      return d != null && d.hour < 12;
-    }).toList();
-    final afternoonTasks = incomplete.where((t) {
-      if (t.dueDate == null) return false;
-      final d = DateTime.tryParse(t.dueDate!);
-      return d != null && d.hour >= 12 && d.hour < 17;
-    }).toList();
-    final eveningTasks = incomplete.where((t) {
-      if (t.dueDate == null) return false;
-      final d = DateTime.tryParse(t.dueDate!);
-      return d != null && d.hour >= 17;
-    }).toList();
+  Widget _buildSidebarSection() {
     final isToday = _selectedDate.year == DateTime.now().year &&
         _selectedDate.month == DateTime.now().month &&
         _selectedDate.day == DateTime.now().day;
 
     return Column(
       children: [
-        _buildTodayFocusCard(isToday, morningTasks, afternoonTasks, eveningTasks),
+        _buildTodayFocusCard(isToday),
         const SizedBox(height: 24),
         _buildZenQuoteCard(),
       ],
     );
   }
 
-  Widget _buildTodayFocusCard(
-    bool isToday,
-    List<Task> morningTasks,
-    List<Task> afternoonTasks,
-    List<Task> eveningTasks,
-  ) {
+  Widget _buildTodayFocusCard(bool isToday) {
     final dateLabel = isToday ? 'Today' : DateFormat('EEEE').format(_selectedDate);
     final dateBadge = '${_selectedDate.day} ${DateFormat('MMM').format(_selectedDate)}';
+    final hasAnyTasks = _morningTasks.isNotEmpty || _afternoonTasks.isNotEmpty || _eveningTasks.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,41 +611,43 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           ],
         ),
         const SizedBox(height: 20),
-        // 任务卡片 —— 独立灰色背景，固定最小高度
-        Container(
-          padding: const EdgeInsets.all(24),
-          constraints: const BoxConstraints(minHeight: 280),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(AppBorderRadius.defaultRadius),
+        SizedBox(
+          height: 320,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(AppBorderRadius.defaultRadius),
+            ),
+            child: hasAnyTasks
+                ? ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      if (_morningTasks.isNotEmpty) ...[
+                        _buildTimeBlock('Morning', 'morning', _morningTasks),
+                        if (_afternoonTasks.isNotEmpty || _eveningTasks.isNotEmpty)
+                          const SizedBox(height: 20),
+                      ],
+                      if (_afternoonTasks.isNotEmpty) ...[
+                        _buildTimeBlock('Afternoon', 'afternoon', _afternoonTasks),
+                        if (_eveningTasks.isNotEmpty) const SizedBox(height: 20),
+                      ],
+                      if (_eveningTasks.isNotEmpty)
+                        _buildTimeBlock('Evening', 'evening', _eveningTasks),
+                    ],
+                  )
+                : Center(child: _buildEmptyDayState()),
           ),
-          child: morningTasks.isEmpty && afternoonTasks.isEmpty && eveningTasks.isEmpty
-              ? Center(child: _buildEmptyDayState())
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (morningTasks.isNotEmpty) ...[
-                      _buildTimeBlock('Morning', morningTasks),
-                      if (afternoonTasks.isNotEmpty || eveningTasks.isNotEmpty)
-                        const SizedBox(height: 24),
-                    ],
-                    if (afternoonTasks.isNotEmpty) ...[
-                      _buildTimeBlock('Afternoon', afternoonTasks),
-                      if (eveningTasks.isNotEmpty) const SizedBox(height: 24),
-                    ],
-                    if (eveningTasks.isNotEmpty)
-                      _buildTimeBlock('Evening', eveningTasks),
-                  ],
-                ),
         ),
       ],
     );
   }
 
-  Widget _buildTimeBlock(String label, List<Task> tasks) {
+  Widget _buildTimeBlock(String label, String blockKey, List<Task> tasks) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Timeline header: label + horizontal rule
         Row(
           children: [
             Text(
@@ -642,17 +664,33 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             Expanded(
               child: Container(
                 height: 1,
-                color: AppColors.outlineVariant.withValues(alpha: 0.2),
+                color: AppColors.outlineVariant.withValues(alpha: 0.15),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        ...tasks.map((task) => _SidebarTaskCard(
+        const SizedBox(height: 12),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: tasks.length,
+          onReorder: (oldIndex, newIndex) => _reorderTasks(blockKey, oldIndex, newIndex),
+          itemBuilder: (context, index) {
+            final task = tasks[index];
+            return _SidebarTaskCard(
+              key: ValueKey(task.id),
               task: task,
               isOngoing: _isTaskOngoing(task),
               categoryColor: _categoryColor,
-            )),
+            );
+          },
+          proxyDecorator: (child, index, animation) {
+            return Material(
+              color: Colors.transparent,
+              child: child,
+            );
+          },
+        ),
       ],
     );
   }
@@ -705,76 +743,86 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(40),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1E293B), Color(0xFF334155)],
-        ),
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: ClipRect(
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Decorative blurred circles
-            Positioned(
-              top: -20,
-              right: -20,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primaryContainer.withValues(alpha: 0.15),
-                  ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Decorative blur: top-right blue circle (simulates blur-3xl)
+          Positioned(
+            top: -60,
+            right: -60,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.3),
+                    AppColors.primary.withValues(alpha: 0.1),
+                    AppColors.primary.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
-            Positioned(
-              bottom: -20,
-              left: -20,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primaryContainer.withValues(alpha: 0.15),
-                  ),
+          ),
+          // Decorative blur: bottom-left orange circle (simulates blur-2xl)
+          Positioned(
+            bottom: -48,
+            left: -48,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.secondaryContainer.withValues(alpha: 0.3),
+                    AppColors.secondaryContainer.withValues(alpha: 0.1),
+                    AppColors.secondaryContainer.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
-            // Quote content
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.format_quote, size: 32, color: AppColors.primaryContainer),
-                const SizedBox(height: 14),
-                Text(
-                  '"${q['quote']}"',
-                  style: const TextStyle(
-                    fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w400,
-                    fontStyle: FontStyle.italic, color: Colors.white, height: 1.5,
-                  ),
+          ),
+          // Quote content
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.format_quote, size: 36, color: AppColors.primaryContainer),
+              const SizedBox(height: 16),
+              Text(
+                '"${q['quote']}"',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w400,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white,
+                  height: 1.6,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  '— ${q['author']}',
-                  style: const TextStyle(
-                    fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w800,
-                    color: AppColors.primaryContainer, letterSpacing: 1.5,
-                  ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '— ${q['author']}'.toUpperCase(),
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primaryContainer,
+                  letterSpacing: 3,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -801,27 +849,95 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       builder: (_) => CreateTaskScreen(
         isModal: true,
         initialProjectId: selectedProjectId,
+        initialDueDate: _selectedDate,
       ),
     );
   }
 
   Widget _buildFAB() {
+    return _AnimatedFAB(onTap: _showCreateTaskSheet);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FAB 带 hover + press 动画
+// ═══════════════════════════════════════════════════════════════
+class _AnimatedFAB extends StatefulWidget {
+  final VoidCallback onTap;
+  const _AnimatedFAB({required this.onTap});
+
+  @override
+  State<_AnimatedFAB> createState() => _AnimatedFABState();
+}
+
+class _AnimatedFABState extends State<_AnimatedFAB>
+    with TickerProviderStateMixin {
+  late AnimationController _pressCtrl;
+  late Animation<double> _pressScale;
+  late AnimationController _expandCtrl;
+  late Animation<double> _expandAnim;
+  bool _hovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(
+      duration: const Duration(milliseconds: 120),
+      vsync: this,
+    );
+    _pressScale = Tween<double>(begin: 1.0, end: 0.92).animate(
+      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeInOut),
+    );
+    _expandCtrl = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _expandAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _expandCtrl, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pressCtrl.dispose();
+    _expandCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => _fabAnimationController.reverse(),
-      onExit: (_) => _fabAnimationController.forward(),
+      onEnter: (_) {
+        setState(() => _hovered = true);
+        _expandCtrl.forward();
+      },
+      onExit: (_) {
+        setState(() => _hovered = false);
+        _expandCtrl.reverse();
+      },
       child: GestureDetector(
-        onTapDown: (_) => _fabAnimationController.forward(),
-        onTapUp: (_) => _fabAnimationController.reverse(),
-        onTapCancel: () => _fabAnimationController.reverse(),
-        onTap: _showCreateTaskSheet,
-        child: ScaleTransition(
-          scale: ReverseAnimation(_fabScaleAnimation),
-          child: Container(
-            width: 56,
-            height: 56,
+        onTapDown: (_) => _pressCtrl.forward(),
+        onTapUp: (_) {
+          _pressCtrl.reverse();
+          widget.onTap();
+        },
+        onTapCancel: () => _pressCtrl.reverse(),
+        child: AnimatedBuilder(
+          animation: _pressScale,
+          builder: (_, child) => Transform.scale(
+            scale: _pressScale.value,
+            child: child,
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             decoration: BoxDecoration(
-              color: AppColors.primary,
-              shape: BoxShape.circle,
+              color: _hovered
+                  ? AppColors.primaryContainer
+                  : AppColors.primary,
+              borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.primary.withValues(alpha: 0.3),
@@ -830,7 +946,34 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 ),
               ],
             ),
-            child: const Icon(Icons.add, color: Colors.white, size: 28),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add, color: Colors.white, size: 28),
+                ClipRect(
+                  child: AnimatedBuilder(
+                    animation: _expandAnim,
+                    builder: (_, child) => SizedBox(
+                      width: 120 * _expandAnim.value,
+                      child: child,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 12),
+                      child: Text(
+                        'Create Event',
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1130,6 +1273,7 @@ class _SidebarTaskCard extends StatefulWidget {
   final bool isOngoing;
   final Color Function(String) categoryColor;
   const _SidebarTaskCard({
+    super.key,
     required this.task,
     required this.isOngoing,
     required this.categoryColor,
@@ -1198,28 +1342,29 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
           child: child,
         ),
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(bottom: 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (time != null) ...[
-                SizedBox(
-                  width: 52,
-                  child: Text(
-                    time,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: widget.isOngoing
-                          ? AppColors.primary
-                          : AppColors.outline.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
+              // Time label — fixed width, left-aligned like a timeline
+              SizedBox(
+                width: 48,
+                child: time != null
+                    ? Text(
+                        time,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: widget.isOngoing
+                              ? AppColors.primary
+                              : AppColors.outline,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(width: 12),
+              // Task card
               Expanded(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -1234,7 +1379,7 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
                         color: widget.isOngoing
                             ? AppColors.primary
                             : widget.categoryColor(task.category),
-                        width: 4,
+                        width: 3,
                       ),
                     ),
                     boxShadow: _isHovered
@@ -1290,7 +1435,7 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
                         ),
                       ],
                       if (task.category.isNotEmpty || task.priority != 'low') ...[
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 6,
                           runSpacing: 4,

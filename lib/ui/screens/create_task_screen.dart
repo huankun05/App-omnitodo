@@ -16,13 +16,16 @@ class CreateTaskScreen extends ConsumerStatefulWidget {
   final bool isModal;
   /// 创建任务时默认选中的项目 ID
   final String? initialProjectId;
-  
+  /// 创建任务时默认的截止日期
+  final DateTime? initialDueDate;
+
   const CreateTaskScreen({
     super.key,
     this.mode,
     this.attachment,
     this.isModal = false,
     this.initialProjectId,
+    this.initialDueDate,
   });
 
   @override
@@ -76,9 +79,13 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // 初始化默认项目
     _selectedProjectId = widget.initialProjectId;
+    // 初始化默认截止日期
+    if (widget.initialDueDate != null) {
+      _dueDate = widget.initialDueDate;
+    }
     
     // 如果有 attachment 参数，保持到 deep 模式中使用
     if (widget.attachment != null) {
@@ -259,6 +266,15 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
     );
   }
 
+  String _formatLocalDate(DateTime date) {
+    final d = DateTime(date.year, date.month, date.day);
+    final offset = d.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final hours = offset.inHours.abs().toString().padLeft(2, '0');
+    final minutes = (offset.inMinutes % 60).abs().toString().padLeft(2, '0');
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}T00:00:00.000$sign$hours:$minutes';
+  }
+
   void _createTask() async {
     final taskTitle = _taskController.text.trim();
     if (taskTitle.isEmpty) {
@@ -287,7 +303,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
         description: _notesController.text.trim(),
         priority: priority,
         category: category,
-        dueDate: _dueDate?.toIso8601String(),
+        dueDate: _dueDate != null
+            ? _formatLocalDate(_dueDate!)
+            : null,
         projectId: _selectedProjectId,
         // 如果是新任务创建，需要先创建任务再创建子任务
         subTasks: _selectedTaskId == null ? _subTasks
