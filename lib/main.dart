@@ -9,7 +9,6 @@ import 'core/router.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/l10n/app_localizations.dart';
-import 'data/providers/tag_provider.dart';
 
 // 条件导入 sqflite_ffi（仅非 Web 平台）
 import 'core/database/database_helper.dart' as db_helper;
@@ -24,26 +23,22 @@ Future<void> main() async {
   await db_helper.DatabaseHelper.ensureInitialized();
   
   final sharedPreferences = await SharedPreferences.getInstance();
-  
+
   // 配置崩溃日志自动上报
   FlutterError.onError = (FlutterErrorDetails details) {
     _reportError(details.exception, details.stack ?? StackTrace.current);
   };
-  
+
   // 配置平台级错误处理
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     _reportError(error, stack);
     return true;
   };
 
-  final tagProvider = TagProvider();
-  await tagProvider.load();
-
   runApp(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWith((ref) async => sharedPreferences),
-        tagProviderProvider.overrideWith((ref) => tagProvider),
       ],
       child: const MyApp(),
     ),

@@ -484,7 +484,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                     Consumer(
                       builder: (context, ref, _) {
                         final tagProv = ref.watch(tagProviderProvider);
-                        final visibleTags = tagProv.visibleTags;
+                        final visibleTags = tagProv.visibleCategories;
                         return Wrap(
                           spacing: 12,
                           runSpacing: 12,
@@ -836,7 +836,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                                   Consumer(
                                     builder: (context, ref, _) {
                                       final tagProv = ref.watch(tagProviderProvider);
-                                      final visibleTags = tagProv.visibleTags;
+                                      final visibleTags = tagProv.visibleCategories;
                                       return Wrap(
                                         spacing: 12,
                                         runSpacing: 12,
@@ -1424,7 +1424,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                                     Consumer(
                                       builder: (context, ref, _) {
                                         final tagProv = ref.watch(tagProviderProvider);
-                                        final visibleTags = tagProv.visibleTags;
+                                        final visibleTags = tagProv.visibleCategories;
                                         return Wrap(
                                           spacing: 8,
                                           runSpacing: 8,

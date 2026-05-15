@@ -208,15 +208,16 @@ class _ManageTagsDialogState extends ConsumerState<ManageTagsDialog> {
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: tagProv.allTags.length,
+                  itemCount: tagProv.allCategories.length,
                   itemBuilder: (_, index) {
-                    final tag = tagProv.allTags[index];
+                    final tag = tagProv.allCategories[index];
                     final isVisible = !tagProv.hiddenNames.contains(tag.name);
+                    final tagColor = TagProvider.parseHexColor(tag.color);
                     return Container(
                       margin: const EdgeInsets.only(bottom: 4),
                       decoration: BoxDecoration(
                         color: isVisible
-                            ? tag.color.withAlpha(18)
+                            ? tagColor.withAlpha(18)
                             : const Color(0xFFF3F3F5),
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -225,13 +226,13 @@ class _ManageTagsDialogState extends ConsumerState<ManageTagsDialog> {
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 12),
                         leading: GestureDetector(
-                          onTap: () => _pickColor(tag.name, tag.color),
+                          onTap: () => _pickColor(tag.name, tagColor),
                           child: Container(
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
                               color: isVisible
-                                  ? tag.color.withAlpha(30)
+                                  ? tagColor.withAlpha(30)
                                   : const Color(0xFFC3C6D7).withAlpha(40),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -239,7 +240,7 @@ class _ManageTagsDialogState extends ConsumerState<ManageTagsDialog> {
                               Icons.label_rounded,
                               size: 16,
                               color: isVisible
-                                  ? tag.color
+                                  ? tagColor
                                   : const Color(0xFF737686),
                             ),
                           ),
@@ -271,7 +272,7 @@ class _ManageTagsDialogState extends ConsumerState<ManageTagsDialog> {
                             Switch(
                               value: isVisible,
                               onChanged: (_) => tagProv.toggleVisibility(tag.name),
-                              activeThumbColor: tag.color,
+                              activeThumbColor: tagColor,
                               materialTapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                             ),

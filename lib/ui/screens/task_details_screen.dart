@@ -1315,8 +1315,8 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen>
         builder: (ctx, setModalState) => Consumer(
           builder: (ctx, ref, _) {
             final tagProv = ref.watch(tagProviderProvider);
-            final allTagNames = tagProv.allTags.map((t) => t.name).toList();
-            final visibleTagNames = tagProv.visibleTags.map((t) => t.name).toList();
+            final allTagNames = tagProv.allTagNames;
+            final visibleTagNames = tagProv.visibleTagNames;
             return Padding(
               padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
               child: Column(

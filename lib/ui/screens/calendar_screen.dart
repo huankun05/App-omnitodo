@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/providers/task_provider.dart';
+import '../../data/providers/tag_provider.dart';
 import '../../data/models/task_models.dart';
+import '../../data/models/time_point.dart';
 import 'create_task_screen.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/responsive_navigation.dart';
@@ -173,9 +176,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   final _searchController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedMonth = DateTime.now();
-  List<Task> _morningTasks = [];
-  List<Task> _afternoonTasks = [];
-  List<Task> _eveningTasks = [];
+  List<TimePoint> _timePoints = [];
+  final Map<String, List<Task>> _tasksByTimePoint = {};
+
+  static const _tpStorageKey = 'omni_time_points';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTimePoints();
+  }
 
   @override
   void dispose() {
@@ -183,54 +193,123 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     super.dispose();
   }
 
-  void _initTaskOrder(List<Task> allTasks) {
+  Future<void> _loadTimePoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString(_tpStorageKey);
+    setState(() {
+      _timePoints = json != null && json.isNotEmpty
+          ? TimePoint.fromJsonList(json)
+          : List.of(TimePoint.defaultTimePoints);
+    });
+  }
+
+  Future<void> _saveTimePoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tpStorageKey, TimePoint.toJsonList(_timePoints));
+  }
+
+  void _addTimePoint(String time) {
+    final id = 'tp_${DateTime.now().millisecondsSinceEpoch}';
+    setState(() {
+      _timePoints.add(TimePoint(id: id, time: time));
+      _timePoints.sort((a, b) => a.time.compareTo(b.time));
+    });
+    _saveTimePoints();
+  }
+
+  void _removeTimePoint(String id) {
+    setState(() {
+      _timePoints.removeWhere((t) => t.id == id);
+    });
+    _saveTimePoints();
+  }
+
+  void _renameTimePoint(String id, String newLabel) {
+    final idx = _timePoints.indexWhere((t) => t.id == id);
+    if (idx < 0) return;
+    setState(() {
+      _timePoints[idx] = _timePoints[idx].copyWith(label: newLabel);
+    });
+    _saveTimePoints();
+  }
+
+  void _initTaskGroups(List<Task> allTasks) {
+    // Sync tags from all tasks into TagProvider
+    _syncTagsFromTasks(allTasks);
+
     final selectedDateTasks = _getTasksForDate(allTasks, _selectedDate);
     final incomplete = selectedDateTasks.where((t) => !t.isCompleted).toList();
-    _morningTasks = [];
-    _afternoonTasks = [];
-    _eveningTasks = [];
+    _tasksByTimePoint.clear();
+    for (final tp in _timePoints) {
+      _tasksByTimePoint[tp.id] = [];
+    }
     for (final t in incomplete) {
-      if (t.dueDate == null) {
-        _morningTasks.add(t);
-        continue;
-      }
-      final hasTime = t.dueDate!.contains('T');
-      if (!hasTime) {
-        _morningTasks.add(t);
-        continue;
-      }
-      final d = DateTime.tryParse(t.dueDate!);
-      if (d == null) {
-        _morningTasks.add(t);
-        continue;
-      }
-      if (d.hour < 12) {
-        _morningTasks.add(t);
-      } else if (d.hour < 17) {
-        _afternoonTasks.add(t);
-      } else {
-        _eveningTasks.add(t);
+      final groupId = _assignToGroup(t);
+      _tasksByTimePoint.putIfAbsent(groupId, () => []).add(t);
+    }
+  }
+
+  void _syncTagsFromTasks(List<Task> allTasks) {
+    final tagProv = ref.read(tagProviderProvider.notifier);
+    final existingNames = tagProv.allTagNames.toSet();
+    for (final task in allTasks) {
+      if (task.category.isEmpty) continue;
+      for (final tag in task.category.split('|')) {
+        final name = tag.trim();
+        if (name.isNotEmpty && !existingNames.contains(name)) {
+          tagProv.addTag(name);
+          existingNames.add(name);
+        }
       }
     }
   }
 
-  void _reorderTasks(String block, int oldIndex, int newIndex) {
-    setState(() {
-      List<Task> list;
-      switch (block) {
-        case 'morning':
-          list = _morningTasks;
-          break;
-        case 'afternoon':
-          list = _afternoonTasks;
-          break;
-        default:
-          list = _eveningTasks;
+  String _assignToGroup(Task task) {
+    if (_timePoints.isEmpty) return '';
+    if (task.dueDate == null || !task.dueDate!.contains('T')) {
+      return _timePoints.first.id;
+    }
+    final d = DateTime.tryParse(task.dueDate!);
+    if (d == null) return _timePoints.first.id;
+    final taskMinutes = d.hour * 60 + d.minute;
+    String bestId = _timePoints.first.id;
+    int bestDiff = 99999;
+    for (final tp in _timePoints) {
+      final parts = tp.time.split(':');
+      final tpMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+      final diff = (taskMinutes - tpMinutes).abs();
+      if (taskMinutes >= tpMinutes && diff < bestDiff) {
+        bestDiff = diff;
+        bestId = tp.id;
       }
-      if (oldIndex < newIndex) newIndex--;
-      final item = list.removeAt(oldIndex);
-      list.insert(newIndex, item);
-    });
+    }
+    if (bestDiff == 99999) return _timePoints.first.id;
+    return bestId;
+  }
+
+  void _moveTaskToGroup(String taskId, String fromGroupId, String toGroupId, int newIndex) {
+    if (fromGroupId == toGroupId) {
+      // within-group reorder
+      final list = _tasksByTimePoint[fromGroupId];
+      if (list == null) return;
+      setState(() {
+        final oldIdx = list.indexWhere((t) => t.id == taskId);
+        if (oldIdx < 0) return;
+        final item = list.removeAt(oldIdx);
+        if (newIndex > oldIdx) newIndex--;
+        list.insert(newIndex, item);
+      });
+    } else {
+      // cross-group move
+      final fromList = _tasksByTimePoint[fromGroupId];
+      final toList = _tasksByTimePoint.putIfAbsent(toGroupId, () => []);
+      setState(() {
+        final oldIdx = fromList?.indexWhere((t) => t.id == taskId) ?? -1;
+        if (oldIdx < 0) return;
+        final item = fromList!.removeAt(oldIdx);
+        toList.insert(newIndex.clamp(0, toList.length), item);
+      });
+    }
   }
 
   List<Task> _getTasksForDate(List<Task> tasks, DateTime date) {
@@ -330,7 +409,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _buildDesktopLayout(List<Task> tasks) {
-    _initTaskOrder(tasks);
+    _initTaskGroups(tasks);
     final tasksByDate = _groupTasksByDate(tasks, _focusedMonth);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,7 +425,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _buildMobileLayout(List<Task> tasks) {
-    _initTaskOrder(tasks);
+    _initTaskGroups(tasks);
     final tasksByDate = _groupTasksByDate(tasks, _focusedMonth);
     return Column(
       children: [
@@ -570,33 +649,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildSidebarSection() {
-    final isToday = _selectedDate.year == DateTime.now().year &&
-        _selectedDate.month == DateTime.now().month &&
-        _selectedDate.day == DateTime.now().day;
-
-    return Column(
-      children: [
-        _buildTodayFocusCard(isToday),
-        const SizedBox(height: 24),
-        _buildZenQuoteCard(),
-      ],
-    );
-  }
-
-  Widget _buildTodayFocusCard(bool isToday) {
-    final dateLabel = isToday ? 'Today' : DateFormat('EEEE').format(_selectedDate);
     final dateBadge = '${_selectedDate.day} ${DateFormat('MMM').format(_selectedDate)}';
-    final hasAnyTasks = _morningTasks.isNotEmpty || _afternoonTasks.isNotEmpty || _eveningTasks.isNotEmpty;
+
+    // Estimate timeline height: viewport - nav(~80) - header(~50) - padding(~96) - quote(~200) - gaps(~80)
+    final viewportH = MediaQuery.of(context).size.height;
+    final timelineH = (viewportH - 506).clamp(200.0, 600.0);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header: Today's Focus + date badge
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              dateLabel,
-              style: const TextStyle(
+            const Text(
+              "Today's Focus",
+              style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
@@ -622,97 +689,290 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ],
         ),
         const SizedBox(height: 20),
+        // Timeline area
         SizedBox(
-          height: 320,
+          height: timelineH,
           child: Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(AppBorderRadius.defaultRadius),
             ),
-            child: hasAnyTasks
-                ? ListView(
-                    padding: EdgeInsets.zero,
-                    children: [
-                      if (_morningTasks.isNotEmpty) ...[
-                        _buildTimeBlock('Morning', 'morning', _morningTasks),
-                        if (_afternoonTasks.isNotEmpty || _eveningTasks.isNotEmpty)
-                          const SizedBox(height: 20),
-                      ],
-                      if (_afternoonTasks.isNotEmpty) ...[
-                        _buildTimeBlock('Afternoon', 'afternoon', _afternoonTasks),
-                        if (_eveningTasks.isNotEmpty) const SizedBox(height: 20),
-                      ],
-                      if (_eveningTasks.isNotEmpty)
-                        _buildTimeBlock('Evening', 'evening', _eveningTasks),
-                    ],
-                  )
-                : Center(child: _buildEmptyDayState()),
+            child: _buildTimeline(),
           ),
         ),
+        const SizedBox(height: 16),
+        _buildZenQuoteCard(),
       ],
     );
   }
 
-  Widget _buildTimeBlock(String label, String blockKey, List<Task> tasks) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Timeline header: label + horizontal rule
-        Row(
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: AppColors.outline,
-                letterSpacing: 2,
+  Widget _buildTimeline() {
+    if (_timePoints.isEmpty) {
+      return GestureDetector(
+        onTap: _showAddTimePointDialog,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildEmptyDayState(),
+              const SizedBox(height: 12),
+              Text(
+                'Tap to add a time point',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: AppColors.outline.withValues(alpha: 0.6),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                height: 1,
-                color: AppColors.outlineVariant.withValues(alpha: 0.15),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        ReorderableListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: tasks.length,
-          onReorder: (oldIndex, newIndex) => _reorderTasks(blockKey, oldIndex, newIndex),
-          itemBuilder: (context, index) {
-            final task = tasks[index];
-            return _SidebarTaskCard(
-              key: ValueKey(task.id),
-              task: task,
-              isOngoing: _isTaskOngoing(task),
-              categoryColor: _categoryColor,
-            );
-          },
-          proxyDecorator: (child, index, animation) {
-            return Material(
-              color: Colors.transparent,
-              child: child,
-            );
-          },
-        ),
-      ],
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 8, left: 20),
+      itemCount: _timePoints.length,
+      itemBuilder: (context, index) {
+        final tp = _timePoints[index];
+        final tasks = _tasksByTimePoint[tp.id] ?? [];
+        final isLast = index == _timePoints.length - 1;
+        return _buildTimePointRow(tp, tasks, isLast, index);
+      },
     );
   }
 
-  bool _isTaskOngoing(Task task) {
-    if (task.dueDate == null) return false;
-    final now = DateTime.now();
-    final dueDate = DateTime.tryParse(task.dueDate!);
-    if (dueDate == null) return false;
-    final endTime = dueDate.add(const Duration(hours: 1));
-    return now.isAfter(dueDate) && now.isBefore(endTime);
+  Widget _buildTimePointRow(TimePoint tp, List<Task> tasks, bool isLast, int index) {
+    final displayLabel = tp.label.isNotEmpty ? tp.label : tp.time;
+    return GestureDetector(
+      // Tap on the dot area to create a task at this time point
+      onDoubleTap: () => _showCreateTaskAtTimePoint(tp),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline: continuous line + dot
+          SizedBox(
+            width: 20,
+            child: Column(
+              children: [
+                const SizedBox(height: 6),
+                // Dot
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                // Continuous line (or gap for last item)
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 60,
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                  )
+                else
+                  const SizedBox(height: 60),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Tasks group
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Group label + actions
+                Row(
+                  children: [
+                    Text(
+                      displayLabel.toUpperCase(),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.outline,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        height: 1,
+                        color: AppColors.outlineVariant.withValues(alpha: 0.15),
+                      ),
+                    ),
+                    _buildTimePointActions(tp),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Task cards
+                if (tasks.isNotEmpty)
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: tasks.length,
+                    onReorder: (oldIndex, newIndex) {
+                      _moveTaskToGroup(tasks[oldIndex].id, tp.id, tp.id, newIndex);
+                    },
+                    itemBuilder: (context, index) {
+                      return _CompactTaskCard(
+                        key: ValueKey(tasks[index].id),
+                        task: tasks[index],
+                        categoryColor: _categoryColor,
+                        tagColor: (name) => ref.read(tagProviderProvider).colorForTag(name),
+                      );
+                    },
+                    proxyDecorator: (child, index, animation) {
+                      return Material(
+                        color: Colors.transparent,
+                        child: child,
+                      );
+                    },
+                  )
+                else
+                  GestureDetector(
+                    onTap: () => _showCreateTaskAtTimePoint(tp),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.add_rounded, size: 14, color: AppColors.outline.withValues(alpha: 0.4)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Add task',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.outline.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                // Clickable gap to add new time point after this one
+                GestureDetector(
+                  onTap: () => _showAddTimePointDialog(afterIndex: index),
+                  child: Container(
+                    height: 20,
+                    width: double.infinity,
+                    color: Colors.transparent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateTaskAtTimePoint(TimePoint tp) {
+    final parts = tp.time.split(':');
+    final h = int.parse(parts[0]);
+    final m = int.parse(parts[1]);
+    final date = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, h, m);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => CreateTaskScreen(
+        isModal: true,
+        initialDueDate: date,
+      ),
+    );
+  }
+
+  Widget _buildTimePointActions(TimePoint tp) {
+    return PopupMenuButton<String>(
+      onSelected: (action) {
+        if (action == 'rename') {
+          _showRenameTimePointDialog(tp);
+        } else if (action == 'delete') {
+          _removeTimePoint(tp.id);
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'rename', child: Text('Rename')),
+        const PopupMenuItem(value: 'delete', child: Text('Delete')),
+      ],
+      child: Icon(
+        Icons.more_horiz,
+        size: 16,
+        color: AppColors.outline.withValues(alpha: 0.5),
+      ),
+    );
+  }
+
+  void _showAddTimePointDialog({int? afterIndex}) {
+    // Default time: after the previous point +1h, or 09:00
+    String defaultTime = '09:00';
+    if (afterIndex != null && afterIndex < _timePoints.length) {
+      final prev = _timePoints[afterIndex].time;
+      final parts = prev.split(':');
+      final h = (int.parse(parts[0]) + 1).clamp(0, 23);
+      defaultTime = '${h.toString().padLeft(2, '0')}:00';
+    }
+    final controller = TextEditingController(text: defaultTime);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Time Point'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'HH:mm (e.g. 14:30)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final time = controller.text.trim();
+              if (RegExp(r'^\d{2}:\d{2}$').hasMatch(time)) {
+                _addTimePoint(time);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameTimePointDialog(TimePoint tp) {
+    final controller = TextEditingController(text: tp.label);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Time Point'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Label (e.g. Morning)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              _renameTimePoint(tp.id, controller.text.trim());
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyDayState() {
@@ -1277,58 +1537,19 @@ class _TaskDots extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 侧边栏任务卡片（带 hover 平移动画）
+// 紧凑任务卡片（标题 + 标签）
 // ═══════════════════════════════════════════════════════════════
-class _SidebarTaskCard extends StatefulWidget {
+class _CompactTaskCard extends StatelessWidget {
   final Task task;
-  final bool isOngoing;
   final Color Function(String) categoryColor;
-  const _SidebarTaskCard({
+  final Color Function(String) tagColor;
+  const _CompactTaskCard({
     super.key,
     required this.task,
-    required this.isOngoing,
     required this.categoryColor,
+    required this.tagColor,
   });
 
-  @override
-  State<_SidebarTaskCard> createState() => _SidebarTaskCardState();
-}
-
-class _SidebarTaskCardState extends State<_SidebarTaskCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _hoverCtrl;
-  late Animation<Offset> _slide;
-  bool _isHovered = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _hoverCtrl = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _slide = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(4, 0),
-    ).animate(CurvedAnimation(parent: _hoverCtrl, curve: Curves.easeOutCubic));
-  }
-
-  @override
-  void dispose() {
-    _hoverCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onHover(bool hovered) {
-    setState(() => _isHovered = hovered);
-    if (hovered) {
-      _hoverCtrl.forward();
-    } else {
-      _hoverCtrl.reverse();
-    }
-  }
-
-  // 简单首字母大写
   String _cap(String s) {
     if (s.isEmpty) return s;
     return s[0].toUpperCase() + s.substring(1).toLowerCase();
@@ -1336,135 +1557,59 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
 
   @override
   Widget build(BuildContext context) {
-    final task = widget.task;
-    final hasTime = task.dueDate != null && task.dueDate!.contains('T');
-    final time = hasTime
-        ? DateFormat('HH:mm').format(DateTime.parse(task.dueDate!))
-        : null;
-    final isMeeting = task.category.toLowerCase().split('|').contains('meeting');
+    final tagNames = task.category
+        .split('|')
+        .where((t) => t.trim().isNotEmpty)
+        .map((t) => t.trim())
+        .toList();
+    if (task.priority != 'low') tagNames.add(task.priority);
 
-    return MouseRegion(
-      onEnter: (_) => _onHover(true),
-      onExit: (_) => _onHover(false),
-      child: AnimatedBuilder(
-        animation: _slide,
-        builder: (_, child) => Transform.translate(
-          offset: _slide.value,
-          child: child,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border(
+            left: BorderSide(
+              color: categoryColor(task.category),
+              width: 3,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.onSurface.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Time label — fixed width, left-aligned like a timeline
-              SizedBox(
-                width: 48,
-                child: time != null
-                    ? Text(
-                        time,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: widget.isOngoing
-                              ? AppColors.primary
-                              : AppColors.outline,
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              task.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurface,
               ),
-              const SizedBox(width: 12),
-              // Task card
-              Expanded(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: _isHovered
-                        ? AppColors.surfaceContainer
-                        : AppColors.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border(
-                      left: BorderSide(
-                        color: widget.isOngoing
-                            ? AppColors.primary
-                            : widget.categoryColor(task.category),
-                        width: 3,
-                      ),
-                    ),
-                    boxShadow: _isHovered
-                        ? [
-                            BoxShadow(
-                              color: AppColors.onSurface.withValues(alpha: 0.06),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ]
-                        : [
-                            BoxShadow(
-                              color: AppColors.onSurface.withValues(alpha: 0.03),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              task.title,
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.onSurface,
-                              ),
-                            ),
-                          ),
-                          if (isMeeting)
-                            const Icon(Icons.video_camera_front,
-                                size: 16, color: AppColors.primary),
-                        ],
-                      ),
-                      if (task.description != null &&
-                          task.description!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          task.description!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            color: AppColors.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                      if (task.category.isNotEmpty || task.priority != 'low') ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            ...task.category
-                                .split('|')
-                                .where((t) => t.trim().isNotEmpty)
-                                .map((t) => _Tag(_cap(t.trim()))),
-                            if (task.priority != 'low') _Tag(_cap(task.priority)),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+            ),
+            if (tagNames.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: tagNames.map((t) {
+                  return _Tag(_cap(t), color: tagColor(t));
+                }).toList(),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -1475,22 +1620,24 @@ class _SidebarTaskCardState extends State<_SidebarTaskCard>
 
 class _Tag extends StatelessWidget {
   final String label;
-  const _Tag(this.label);
+  final Color? color;
+  const _Tag(this.label, {this.color});
 
   @override
   Widget build(BuildContext context) {
+    final c = color ?? AppColors.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
+        color: c.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: AppColors.onSurfaceVariant,
+          color: c,
         ),
       ),
     );

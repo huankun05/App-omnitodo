@@ -2,95 +2,117 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import '../models/task_models.dart';
+import '../services/task_service.dart';
+import 'task_provider.dart';
 
 final tagProviderProvider = ChangeNotifierProvider<TagProvider>((ref) {
-  throw UnimplementedError('Must be overridden in ProviderScope');
+  final service = ref.watch(taskServiceProvider.future);
+  final tagProvider = TagProvider._(ref);
+  // 异步加载：等 TaskService 就绪后加载 Category
+  service.then((s) async {
+    tagProvider._taskService = s;
+    await tagProvider.load();
+  });
+  return tagProvider;
 });
 
-class TagDefinition {
-  final String name;
-  final Color color;
-  final bool isDefault;
-
-  const TagDefinition({
-    required this.name,
-    required this.color,
-    this.isDefault = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'color': color.toARGB32(),
-        'isDefault': isDefault,
-      };
-
-  factory TagDefinition.fromJson(Map<String, dynamic> json) => TagDefinition(
-        name: json['name'] as String,
-        color: Color(json['color'] as int),
-        isDefault: json['isDefault'] as bool? ?? false,
-      );
-}
-
+/// TagProvider — 基于数据库 Category 的标签管理
 class TagProvider extends ChangeNotifier {
-  static const _storageKey = 'omni_tags';
   static const _hiddenKey = 'omni_hidden_tags';
+  static const _uuid = Uuid();
+  final Ref _ref;
 
-  List<TagDefinition> _allTags = [];
+  TaskService? _taskService;
+  List<Category> _allCategories = [];
   Set<String> _hiddenNames = {};
+  bool _loaded = false;
 
-  static const _defaultTags = [
-    TagDefinition(name: 'Work', color: Color(0xFF2563EB), isDefault: true),
-    TagDefinition(name: 'Personal', color: Color(0xFF9D4300), isDefault: true),
-    TagDefinition(name: 'Health', color: Color(0xFF006874), isDefault: true),
-    TagDefinition(name: 'Urgent', color: Color(0xFFBA1A1A), isDefault: true),
-    TagDefinition(name: 'Study', color: Color(0xFF6750A4), isDefault: true),
-    TagDefinition(name: 'Finance', color: Color(0xFF00696D), isDefault: true),
-  ];
+  TagProvider._(this._ref);
 
-  List<TagDefinition> get allTags => List.unmodifiable(_allTags);
+  List<Category> get allCategories => List.unmodifiable(_allCategories);
   Set<String> get hiddenNames => Set.unmodifiable(_hiddenNames);
+  bool get isLoaded => _loaded;
 
-  List<TagDefinition> get visibleTags =>
-      _allTags.where((t) => !_hiddenNames.contains(t.name)).toList();
+  List<Category> get visibleCategories =>
+      _allCategories.where((t) => !_hiddenNames.contains(t.name)).toList();
+
+  List<String> get allTagNames => _allCategories.map((c) => c.name).toList();
+  List<String> get visibleTagNames =>
+      visibleCategories.map((c) => c.name).toList();
 
   Future<void> load() async {
+    if (_taskService == null) return;
+    _allCategories = await _taskService!.getCategories();
     final prefs = await SharedPreferences.getInstance();
-    final tagsJson = prefs.getString(_storageKey);
-    if (tagsJson != null && tagsJson.isNotEmpty) {
-      final list = jsonDecode(tagsJson) as List;
-      _allTags = list.map((e) => TagDefinition.fromJson(e)).toList();
-    } else {
-      _allTags = List.of(_defaultTags);
-    }
     final hiddenJson = prefs.getString(_hiddenKey);
     if (hiddenJson != null && hiddenJson.isNotEmpty) {
       _hiddenNames = Set<String>.from(jsonDecode(hiddenJson));
     }
+    _loaded = true;
     notifyListeners();
   }
 
-  Future<void> _save() async {
+  Future<void> _saveHidden() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        _storageKey, jsonEncode(_allTags.map((t) => t.toJson()).toList()));
     await prefs.setString(_hiddenKey, jsonEncode(_hiddenNames.toList()));
   }
 
   Future<void> addTag(String name, {Color? color}) async {
-    if (_allTags.any((t) => t.name == name)) return;
-    _allTags.add(TagDefinition(
-      name: name,
-      color: color ?? _colorForIndex(_allTags.length),
-    ));
+    if (_taskService == null) return;
+    if (_allCategories.any((c) => c.name == name)) return;
+    final colorStr = color != null
+        ? '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'
+        : _hexForIndex(_allCategories.length);
+    final category = Category(id: _uuid.v4(), name: name, color: colorStr);
+    await _taskService!.createCategory(category);
+    _allCategories.add(category);
     notifyListeners();
-    await _save();
   }
 
   Future<void> removeTag(String name) async {
-    _allTags.removeWhere((t) => t.name == name);
+    if (_taskService == null) return;
+    final cat = _allCategories.cast<Category?>().firstWhere(
+          (c) => c?.name == name, orElse: () => null);
+    if (cat == null) return;
+    await _taskService!.deleteCategory(cat.id);
+    _allCategories.removeWhere((c) => c.name == name);
     _hiddenNames.remove(name);
     notifyListeners();
-    await _save();
+    await _saveHidden();
+  }
+
+  Future<void> renameTag(String oldName, String newName) async {
+    if (_taskService == null) return;
+    if (newName.isEmpty || newName == oldName) return;
+    if (_allCategories.any((c) => c.name == newName)) return;
+    final idx = _allCategories.indexWhere((c) => c.name == oldName);
+    if (idx < 0) return;
+    final old = _allCategories[idx];
+    await _taskService!.deleteCategory(old.id);
+    final updated = Category(id: _uuid.v4(), name: newName, color: old.color, icon: old.icon);
+    await _taskService!.createCategory(updated);
+    _allCategories[idx] = updated;
+    if (_hiddenNames.contains(oldName)) {
+      _hiddenNames.remove(oldName);
+      _hiddenNames.add(newName);
+    }
+    notifyListeners();
+    await _saveHidden();
+  }
+
+  Future<void> updateTagColor(String name, Color color) async {
+    if (_taskService == null) return;
+    final idx = _allCategories.indexWhere((c) => c.name == name);
+    if (idx < 0) return;
+    final old = _allCategories[idx];
+    final colorStr = '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    await _taskService!.deleteCategory(old.id);
+    final updated = Category(id: _uuid.v4(), name: name, color: colorStr, icon: old.icon);
+    await _taskService!.createCategory(updated);
+    _allCategories[idx] = updated;
+    notifyListeners();
   }
 
   Future<void> toggleVisibility(String name) async {
@@ -100,51 +122,45 @@ class TagProvider extends ChangeNotifier {
       _hiddenNames.add(name);
     }
     notifyListeners();
-    await _save();
-  }
-
-  Future<void> renameTag(String oldName, String newName) async {
-    if (newName.isEmpty || newName == oldName) return;
-    if (_allTags.any((t) => t.name == newName)) return;
-    final idx = _allTags.indexWhere((t) => t.name == oldName);
-    if (idx < 0) return;
-    final old = _allTags[idx];
-    _allTags[idx] = TagDefinition(name: newName, color: old.color, isDefault: old.isDefault);
-    if (_hiddenNames.contains(oldName)) {
-      _hiddenNames.remove(oldName);
-      _hiddenNames.add(newName);
-    }
-    notifyListeners();
-    await _save();
-  }
-
-  Future<void> updateTagColor(String name, Color color) async {
-    final idx = _allTags.indexWhere((t) => t.name == name);
-    if (idx < 0) return;
-    final old = _allTags[idx];
-    _allTags[idx] = TagDefinition(name: name, color: color, isDefault: old.isDefault);
-    notifyListeners();
-    await _save();
+    await _saveHidden();
   }
 
   Color colorForTag(String name) {
-    final tag = _allTags.cast<TagDefinition?>().firstWhere(
-          (t) => t?.name == name,
-          orElse: () => null,
-        );
-    return tag?.color ?? _colorForIndex(name.hashCode);
+    final cat = _allCategories.cast<Category?>().firstWhere(
+          (c) => c?.name == name, orElse: () => null);
+    if (cat != null) return parseHexColor(cat.color);
+    return _colorForIndex(name.hashCode);
+  }
+
+  Future<void> syncTagsFromTasks(List<Task> tasks) async {
+    final existingNames = _allCategories.map((c) => c.name).toSet();
+    for (final task in tasks) {
+      if (task.category.isEmpty) continue;
+      for (final tag in task.category.split('|')) {
+        final name = tag.trim();
+        if (name.isNotEmpty && !existingNames.contains(name)) {
+          await addTag(name);
+          existingNames.add(name);
+        }
+      }
+    }
+  }
+
+  static Color parseHexColor(String hex) {
+    try {
+      hex = hex.replaceFirst('#', '');
+      if (hex.length == 6) hex = 'FF$hex';
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return const Color(0xFF2563EB);
+    }
   }
 
   static const _palette = [
-    Color(0xFF2563EB),
-    Color(0xFF9D4300),
-    Color(0xFF943700),
-    Color(0xFF006874),
-    Color(0xFF6750A4),
-    Color(0xFF00696D),
-    Color(0xFFBA1A1A),
-    Color(0xFF386A20),
+    '#2563EB', '#9D4300', '#943700', '#006874',
+    '#6750A4', '#00696D', '#BA1A1A', '#386A20',
   ];
 
-  Color _colorForIndex(int index) => _palette[index % _palette.length];
+  String _hexForIndex(int index) => _palette[index % _palette.length];
+  Color _colorForIndex(int index) => parseHexColor(_hexForIndex(index));
 }
