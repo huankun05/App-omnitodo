@@ -7,6 +7,8 @@ import '../widgets/app_widgets.dart';
 import '../widgets/responsive_navigation.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../data/providers/task_provider.dart';
+import '../../data/models/task_models.dart';
 
 class FocusSessionScreen extends ConsumerStatefulWidget {
   const FocusSessionScreen({super.key});
@@ -29,6 +31,8 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
   double _duration = 25;
   bool _autoStartBreaks = true;
   bool _muteNotifications = false;
+  String? _currentFocusTaskId;
+  String? _currentSessionId;
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -63,7 +67,14 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     super.dispose();
   }
 
-  void _startSession() {
+  void _startSession() async {
+    final durationMinutes = _duration.toInt();
+    try {
+      final session = await ref.read(focusNotifierProvider.notifier)
+          .startFocusSession(_currentFocusTaskId, durationMinutes);
+      _currentSessionId = session.id;
+    } catch (_) {}
+
     setState(() {
       _isSessionActive = true;
       _isPaused = false;
@@ -116,9 +127,18 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     });
   }
 
-  void _completeSession() {
+  void _completeSession() async {
     _timer?.cancel();
     _pulseController.stop();
+
+    if (_currentSessionId != null) {
+      try {
+        await ref.read(focusNotifierProvider.notifier)
+            .endFocusSession(_currentSessionId!);
+      } catch (_) {}
+      _currentSessionId = null;
+    }
+
     final elapsedMinutes = _timeRemaining ~/ 60;
     setState(() {
       _isSessionActive = false;
@@ -132,6 +152,7 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     _timer?.cancel();
     _pulseController.stop();
     _resetRotationController.forward(from: 0);
+    _currentSessionId = null;
     setState(() {
       _isSessionActive = false;
       _isPaused = false;
@@ -202,6 +223,21 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
       });
     });
 
+    ref.read(settingsProvider.future).then((settings) {
+      if (mounted && !_isSessionActive) {
+        final newTotal = (settings.focusDuration * 60).toInt();
+        if (_totalTime != newTotal) {
+          setState(() {
+            _totalTime = newTotal;
+            _timeRemaining = newTotal;
+            _duration = settings.focusDuration.toDouble();
+          });
+        }
+      }
+    });
+
+    final dailyStatsAsync = ref.watch(dailyFocusStatsProvider);
+    final focusTaskQueue = ref.watch(focusTaskQueueProvider);
     final l10n = AppLocalizations.of(context);
 
     return ResponsiveNavigation(
@@ -212,14 +248,14 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
         body: SafeArea(
           bottom: false,
           child: isDesktop
-              ? _buildDesktopLayout(formattedTime, l10n)
-              : _buildMobileLayout(formattedTime, l10n),
+              ? _buildDesktopLayout(formattedTime, dailyStatsAsync.valueOrNull, focusTaskQueue, l10n)
+              : _buildMobileLayout(formattedTime, dailyStatsAsync.valueOrNull, focusTaskQueue, l10n),
         ),
       ),
     );
   }
 
-  Widget _buildDesktopLayout(String formattedTime, AppLocalizations? l10n) {
+  Widget _buildDesktopLayout(String formattedTime, DailyFocusStats? dailyStats, List<Task> queue, AppLocalizations? l10n) {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 48),
@@ -229,19 +265,16 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left Column: Stats & Queue
                 Expanded(
                   flex: 3,
-                  child: _buildLeftPanel(l10n),
+                  child: _buildLeftPanel(dailyStats, queue, l10n),
                 ),
                 const SizedBox(width: 48),
-                // Center Column: Timer
                 Expanded(
                   flex: 6,
                   child: _buildCenterPanel(formattedTime, true, l10n),
                 ),
                 const SizedBox(width: 48),
-                // Right Column: Configuration
                 Expanded(
                   flex: 3,
                   child: _buildRightPanel(),
@@ -254,7 +287,7 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     );
   }
 
-  Widget _buildMobileLayout(String formattedTime, AppLocalizations? l10n) {
+  Widget _buildMobileLayout(String formattedTime, DailyFocusStats? dailyStats, List<Task> queue, AppLocalizations? l10n) {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -262,7 +295,7 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
           children: [
             _buildCenterPanel(formattedTime, false, l10n),
             const SizedBox(height: 32),
-            _buildLeftPanel(l10n),
+            _buildLeftPanel(dailyStats, queue, l10n),
             const SizedBox(height: 32),
             _buildRightPanel(),
             const SizedBox(height: 100),
@@ -291,19 +324,24 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
   }
 
   // ── Left Panel (Stats & Queue) ───────────────────────────────
-  Widget _buildLeftPanel(AppLocalizations? l10n) {
+  Widget _buildLeftPanel(DailyFocusStats? dailyStats, List<Task> queue, AppLocalizations? l10n) {
     return Column(
       children: [
-        // Statistics Dashboard
-        _buildStatsCard(l10n),
+        _buildStatsCard(dailyStats, l10n),
         const SizedBox(height: 32),
-        // Task Queue
-        _buildTaskQueue(l10n),
+        _buildTaskQueue(queue, l10n),
       ],
     );
   }
 
-  Widget _buildStatsCard(AppLocalizations? l10n) {
+  String _formatDailyFocusTime(int totalMinutes) {
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    if (hours > 0) return '${hours}h ${minutes}m';
+    return '${minutes}m';
+  }
+
+  Widget _buildStatsCard(DailyFocusStats? stats, AppLocalizations? l10n) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -330,9 +368,9 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             ],
           ),
           const SizedBox(height: 16),
-          _buildStatItem('Focus Time', '4h 25m'),
+          _buildStatItem('Focus Time', _formatDailyFocusTime(stats?.focusMinutes ?? 0)),
           const SizedBox(height: 12),
-          _buildStatItem('Completed', '12 Tasks'),
+          _buildStatItem('Completed', '${stats?.completedTasks ?? 0} Tasks'),
         ],
       ),
     );
@@ -374,7 +412,7 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     );
   }
 
-  Widget _buildTaskQueue(AppLocalizations? l10n) {
+  Widget _buildTaskQueue(List<Task> queue, AppLocalizations? l10n) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -409,33 +447,58 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             ],
           ),
           const SizedBox(height: 16),
-          // Current task
-          _buildQueueItem(
-            status: 'Current',
-            subtitle: '2/3 Sessions',
-            title: 'Design System Docs',
-            isActive: true,
-            progress: 0.66,
-          ),
-          const SizedBox(height: 12),
-          // Next task
-          _buildQueueItem(
-            status: 'Next',
-            subtitle: 'Est: 2 Sessions',
-            title: 'API Integration',
-            isActive: false,
-          ),
-          const SizedBox(height: 12),
-          // Upcoming task
-          _buildQueueItem(
-            status: 'Upcoming',
-            subtitle: 'Est: 1 Session',
-            title: 'Client Briefing',
-            isActive: false,
-          ),
+          if (queue.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No tasks in queue',
+                  style: TextStyle(
+                    fontFamily: GoogleFonts.nunito().fontFamily,
+                    fontSize: 13,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            _buildQueueItem(
+              status: 'Current',
+              subtitle: queue[0].priority,
+              title: queue[0].title,
+              isActive: _currentFocusTaskId == null || _currentFocusTaskId == queue[0].id,
+              onTap: () => _selectFocusTask(queue[0].id),
+            ),
+            if (queue.length > 1) ...[
+              const SizedBox(height: 12),
+              _buildQueueItem(
+                status: 'Next',
+                subtitle: queue[1].priority,
+                title: queue[1].title,
+                isActive: _currentFocusTaskId == queue[1].id,
+                onTap: () => _selectFocusTask(queue[1].id),
+              ),
+            ],
+            if (queue.length > 2) ...[
+              const SizedBox(height: 12),
+              _buildQueueItem(
+                status: 'Upcoming',
+                subtitle: queue[2].priority,
+                title: queue[2].title,
+                isActive: false,
+              ),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  void _selectFocusTask(String taskId) {
+    if (_isSessionActive) return;
+    setState(() {
+      _currentFocusTaskId = taskId;
+    });
   }
 
   Widget _buildQueueItem({
@@ -443,9 +506,9 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     required String subtitle,
     required String title,
     required bool isActive,
-    double? progress,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isActive
@@ -490,21 +553,14 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
               color: AppColors.onSurface,
             ),
           ),
-          if (progress != null) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                minHeight: 6,
-              ),
-            ),
-          ],
         ],
       ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(onTap: onTap, child: card);
+    }
+    return card;
   }
 
   // ── Right Panel (Configuration) ──────────────────────────────
@@ -784,6 +840,7 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
       _totalTime = (value * 60).toInt();
       _timeRemaining = _totalTime;
     });
+    ref.read(settingsProvider.notifier).updateFocusDuration(value);
   }
 
   // ── Deep Focus Mode Label ─────────────────────────────────────

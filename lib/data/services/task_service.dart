@@ -679,6 +679,18 @@ class TaskService {
     }
   }
 
+  Future<Map<String, int>> getDailyFocusStats() async {
+    final stats = await _db.getDailyFocusStats();
+    return {
+      'totalMinutes': stats['totalMinutes'] as int,
+      'totalSessions': stats['totalSessions'] as int,
+    };
+  }
+
+  Future<int> getTodayCompletedTaskCount() async {
+    return await _db.getTodayCompletedTaskCount();
+  }
+
   Future<List<FocusSession>> getFocusSessions() async {
     try {
       final response = await _dio.get('/focus-sessions');

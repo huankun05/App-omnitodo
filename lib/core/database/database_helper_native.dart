@@ -391,6 +391,35 @@ class DatabaseHelper {
     };
   }
 
+  Future<Map<String, dynamic>> getDailyFocusStats() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(SUM($columnFocusDuration), 0) as totalMinutes,
+        COUNT(*) as totalSessions
+      FROM $tableFocusSessions
+      WHERE $columnFocusCompleted = 1
+        AND date($columnFocusStartTime) = date('now', 'localtime')
+    ''');
+    return {
+      'totalMinutes': result.first['totalMinutes'] as int,
+      'totalSessions': result.first['totalSessions'] as int,
+    };
+  }
+
+  Future<int> getTodayCompletedTaskCount() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT COUNT(*) as count
+      FROM $tableTasks
+      WHERE $columnTaskIsCompleted = 1
+        AND $columnTaskUpdatedAt IS NOT NULL
+        AND date($columnTaskUpdatedAt) = date('now', 'localtime')
+        AND $columnTaskDeletedAt IS NULL
+    ''');
+    return result.first['count'] as int;
+  }
+
   // ─── 待同步队列 (Pending Sync) ─────────────────────────────
 
   Future<void> markPendingSync(

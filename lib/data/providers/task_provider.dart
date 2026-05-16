@@ -256,13 +256,16 @@ class FocusNotifier extends AsyncNotifier<FocusStats> {
 
   Future<FocusSession> startFocusSession(String? taskId, int duration) async {
     final service = await ref.watch(taskServiceProvider.future);
-    return service.startFocusSession(taskId, duration);
+    final session = await service.startFocusSession(taskId, duration);
+    ref.invalidate(dailyFocusStatsProvider);
+    return session;
   }
 
   Future<FocusSession> endFocusSession(String id) async {
     final service = await ref.watch(taskServiceProvider.future);
     final session = await service.endFocusSession(id);
     state = await AsyncValue.guard(() => service.getFocusStats());
+    ref.invalidate(dailyFocusStatsProvider);
     return session;
   }
 
@@ -277,3 +280,38 @@ class FocusNotifier extends AsyncNotifier<FocusStats> {
     return service.getFocusSessions();
   }
 }
+
+final dailyFocusStatsProvider = FutureProvider<DailyFocusStats>((ref) async {
+  final service = await ref.watch(taskServiceProvider.future);
+  final focusStats = await service.getDailyFocusStats();
+  final completedTasks = await service.getTodayCompletedTaskCount();
+  return DailyFocusStats(
+    focusMinutes: focusStats['totalMinutes']!,
+    focusSessions: focusStats['totalSessions']!,
+    completedTasks: completedTasks,
+  );
+});
+
+final focusTaskQueueProvider = Provider<List<Task>>((ref) {
+  final tasksAsync = ref.watch(taskNotifierProvider);
+  return tasksAsync.when(
+    data: (tasks) {
+      final uncompleted = tasks
+          .where((t) => !t.isCompleted && t.deletedAt == null)
+          .toList();
+      const priorityOrder = {'high': 0, 'medium': 1, 'low': 2};
+      uncompleted.sort((a, b) {
+        final aPri = priorityOrder[a.priority] ?? 1;
+        final bPri = priorityOrder[b.priority] ?? 1;
+        if (aPri != bPri) return aPri.compareTo(bPri);
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
+      return uncompleted;
+    },
+    loading: () => [],
+    error: (_, _) => [],
+  );
+});

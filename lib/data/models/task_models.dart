@@ -146,3 +146,15 @@ class FocusStats with _$FocusStats {
 
   factory FocusStats.fromJson(Map<String, dynamic> json) => _$FocusStatsFromJson(json);
 }
+
+class DailyFocusStats {
+  final int focusMinutes;
+  final int focusSessions;
+  final int completedTasks;
+
+  const DailyFocusStats({
+    required this.focusMinutes,
+    required this.focusSessions,
+    required this.completedTasks,
+  });
+}

@@ -66,6 +66,13 @@ class DatabaseHelper {
     'completionRate': 0,
   };
 
+  Future<Map<String, dynamic>> getDailyFocusStats() async => {
+    'totalMinutes': 0,
+    'totalSessions': 0,
+  };
+
+  Future<int> getTodayCompletedTaskCount() async => 0;
+
   Future<void> markPendingSync(String opType, String targetId, Map<String, dynamic> payload) async {}
   Future<List<Map<String, dynamic>>> getPendingSync() async => [];
   Future<void> removePendingSync(int id) async {}
