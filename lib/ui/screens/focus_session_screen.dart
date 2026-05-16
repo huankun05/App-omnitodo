@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/responsive_navigation.dart';
 import '../../core/providers/settings_provider.dart';
@@ -14,6 +15,8 @@ class FocusSessionScreen extends ConsumerStatefulWidget {
   ConsumerState<FocusSessionScreen> createState() => _FocusSessionScreenState();
 }
 
+enum TimerMode { pomodoro, stopwatch, countdown }
+
 class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     with TickerProviderStateMixin {
   bool _isSessionActive = false;
@@ -21,7 +24,12 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
   late int _timeRemaining;
   late int _totalTime;
   Timer? _timer;
-  
+
+  TimerMode _selectedMode = TimerMode.pomodoro;
+  double _duration = 25;
+  bool _autoStartBreaks = true;
+  bool _muteNotifications = false;
+
   // Animation controllers
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -62,12 +70,18 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     });
     _pulseController.repeat(reverse: true);
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeRemaining > 0) {
+      if (_selectedMode == TimerMode.stopwatch) {
         setState(() {
-          _timeRemaining--;
+          _timeRemaining++;
         });
       } else {
-        _completeSession();
+        if (_timeRemaining > 0) {
+          setState(() {
+            _timeRemaining--;
+          });
+        } else {
+          _completeSession();
+        }
       }
     });
   }
@@ -86,12 +100,18 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     });
     _pulseController.repeat(reverse: true);
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeRemaining > 0) {
+      if (_selectedMode == TimerMode.stopwatch) {
         setState(() {
-          _timeRemaining--;
+          _timeRemaining++;
         });
       } else {
-        _completeSession();
+        if (_timeRemaining > 0) {
+          setState(() {
+            _timeRemaining--;
+          });
+        } else {
+          _completeSession();
+        }
       }
     });
   }
@@ -99,12 +119,13 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
   void _completeSession() {
     _timer?.cancel();
     _pulseController.stop();
+    final elapsedMinutes = _timeRemaining ~/ 60;
     setState(() {
       _isSessionActive = false;
       _isPaused = false;
-      _timeRemaining = _totalTime;
+      _timeRemaining = _selectedMode == TimerMode.stopwatch ? 0 : _totalTime;
     });
-    _showCompletionDialog();
+    _showCompletionDialog(elapsedMinutes);
   }
 
   void _resetSession() {
@@ -114,11 +135,11 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     setState(() {
       _isSessionActive = false;
       _isPaused = false;
-      _timeRemaining = _totalTime;
+      _timeRemaining = _selectedMode == TimerMode.stopwatch ? 0 : _totalTime;
     });
   }
 
-  void _showCompletionDialog() {
+  void _showCompletionDialog(int elapsedMinutes) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -141,9 +162,9 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'You focused for ${_totalTime ~/ 60} minutes. Great job!',
+              'You focused for $elapsedMinutes minutes. Great job!',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.onSurfaceVariant),
+              style: TextStyle(color: AppColors.onSurfaceVariant),
             ),
           ],
         ),
@@ -169,13 +190,13 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth >= 768;
 
-    // Listen for settings changes
     ref.listen<AsyncValue<AppSettings>>(settingsProvider, (previous, next) {
       next.whenData((settings) {
         if (!_isSessionActive && previous?.valueOrNull?.focusDuration != settings.focusDuration) {
           setState(() {
             _totalTime = (settings.focusDuration * 60).toInt();
             _timeRemaining = _totalTime;
+            _duration = settings.focusDuration.toDouble();
           });
         }
       });
@@ -186,44 +207,46 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     return ResponsiveNavigation(
       currentPage: 'focus',
       child: Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.surfaceContainer,
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           bottom: false,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isDesktop ? 0 : 24,
-                vertical: isDesktop ? 48 : 32,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
-                  child: Column(
-                    children: [
-                      // Content area - max-w-2xl centered
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 24),
-                            _buildFocusModeLabel(l10n),
-                            const SizedBox(height: 16),
-                            _buildTitle(l10n),
-                            const SizedBox(height: 48),
-                            _buildTimer(formattedTime, isDesktop, l10n),
-                            const SizedBox(height: 48),
-                            _buildControlButtons(l10n),
-                            const SizedBox(height: 64),
-                            _buildCurrentTaskCard(l10n),
-                            const SizedBox(height: 100),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+          child: isDesktop
+              ? _buildDesktopLayout(formattedTime, l10n)
+              : _buildMobileLayout(formattedTime, l10n),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(String formattedTime, AppLocalizations? l10n) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 48),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left Column: Stats & Queue
+                Expanded(
+                  flex: 3,
+                  child: _buildLeftPanel(l10n),
                 ),
-              ),
+                const SizedBox(width: 48),
+                // Center Column: Timer
+                Expanded(
+                  flex: 6,
+                  child: _buildCenterPanel(formattedTime, true, l10n),
+                ),
+                const SizedBox(width: 48),
+                // Right Column: Configuration
+                Expanded(
+                  flex: 3,
+                  child: _buildRightPanel(),
+                ),
+              ],
             ),
           ),
         ),
@@ -231,7 +254,537 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     );
   }
 
+  Widget _buildMobileLayout(String formattedTime, AppLocalizations? l10n) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          children: [
+            _buildCenterPanel(formattedTime, false, l10n),
+            const SizedBox(height: 32),
+            _buildLeftPanel(l10n),
+            const SizedBox(height: 32),
+            _buildRightPanel(),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
 
+
+
+  // ── Center Panel (Timer) ─────────────────────────────────────
+  Widget _buildCenterPanel(String formattedTime, bool isDesktop, AppLocalizations? l10n) {
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        _buildFocusModeLabel(l10n),
+        const SizedBox(height: 16),
+        _buildTitle(l10n),
+        SizedBox(height: isDesktop ? 48 : 40),
+        _buildTimer(formattedTime, isDesktop, l10n),
+        SizedBox(height: isDesktop ? 48 : 40),
+        _buildControlButtons(l10n),
+      ],
+    );
+  }
+
+  // ── Left Panel (Stats & Queue) ───────────────────────────────
+  Widget _buildLeftPanel(AppLocalizations? l10n) {
+    return Column(
+      children: [
+        // Statistics Dashboard
+        _buildStatsCard(l10n),
+        const SizedBox(height: 32),
+        // Task Queue
+        _buildTaskQueue(l10n),
+      ],
+    );
+  }
+
+  Widget _buildStatsCard(AppLocalizations? l10n) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.surfaceContainerHighest),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.analytics_outlined, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Daily Overview',
+                style: TextStyle(
+                  fontFamily: GoogleFonts.nunito().fontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildStatItem('Focus Time', '4h 25m'),
+          const SizedBox(height: 12),
+          _buildStatItem('Completed', '12 Tasks'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontFamily: GoogleFonts.nunito().fontFamily,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.onSurface,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: GoogleFonts.nunito().fontFamily,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: AppColors.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskQueue(AppLocalizations? l10n) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.surfaceContainerHighest),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Queue',
+                style: TextStyle(
+                  fontFamily: GoogleFonts.nunito().fontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.onSurface,
+                ),
+              ),
+              Text(
+                'View All',
+                style: TextStyle(
+                  fontFamily: GoogleFonts.nunito().fontFamily,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Current task
+          _buildQueueItem(
+            status: 'Current',
+            subtitle: '2/3 Sessions',
+            title: 'Design System Docs',
+            isActive: true,
+            progress: 0.66,
+          ),
+          const SizedBox(height: 12),
+          // Next task
+          _buildQueueItem(
+            status: 'Next',
+            subtitle: 'Est: 2 Sessions',
+            title: 'API Integration',
+            isActive: false,
+          ),
+          const SizedBox(height: 12),
+          // Upcoming task
+          _buildQueueItem(
+            status: 'Upcoming',
+            subtitle: 'Est: 1 Session',
+            title: 'Client Briefing',
+            isActive: false,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQueueItem({
+    required String status,
+    required String subtitle,
+    required String title,
+    required bool isActive,
+    double? progress,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isActive
+            ? AppColors.primary.withValues(alpha: 0.05)
+            : AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  fontFamily: GoogleFonts.nunito().fontFamily,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: isActive ? AppColors.primary : AppColors.onSurface,
+                  letterSpacing: 1,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontFamily: GoogleFonts.nunito().fontFamily,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: GoogleFonts.nunito().fontFamily,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.onSurface,
+            ),
+          ),
+          if (progress != null) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                minHeight: 6,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Right Panel (Configuration) ──────────────────────────────
+  Widget _buildRightPanel() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.surfaceContainerHighest),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.settings_suggest_outlined, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Configuration',
+                style: TextStyle(
+                  fontFamily: GoogleFonts.nunito().fontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Timer Mode
+          _buildModeSelector(),
+          const SizedBox(height: 24),
+          // Duration
+          _buildDurationControl(),
+          const SizedBox(height: 24),
+          // Settings toggles
+          Container(
+            padding: const EdgeInsets.only(top: 16),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.surfaceContainerHighest, width: 0.5)),
+            ),
+            child: Column(
+              children: [
+                _buildToggleRow(
+                  'Auto-start Breaks',
+                  _autoStartBreaks,
+                  (v) => setState(() => _autoStartBreaks = v),
+                ),
+                const SizedBox(height: 16),
+                _buildToggleRow(
+                  'Mute Notifications',
+                  _muteNotifications,
+                  (v) => setState(() => _muteNotifications = v),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'TIMER MODE',
+          style: TextStyle(
+            fontFamily: GoogleFonts.nunito().fontFamily,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: AppColors.onSurface,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildModeButton('Pomodoro', TimerMode.pomodoro),
+        const SizedBox(height: 8),
+        _buildModeButton('Stopwatch', TimerMode.stopwatch),
+        const SizedBox(height: 8),
+        _buildModeButton('Countdown', TimerMode.countdown),
+      ],
+    );
+  }
+
+  Widget _buildModeButton(String label, TimerMode mode) {
+    final isSelected = _selectedMode == mode;
+    return GestureDetector(
+      onTap: () => _onModeChanged(mode),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected
+              ? null
+              : Border.all(color: AppColors.surfaceContainerHighest),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: GoogleFonts.nunito().fontFamily,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isSelected ? Colors.white : AppColors.onSurface,
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle, size: 18, color: Colors.white),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDurationControl() {
+    final mode = _selectedMode;
+    if (mode == TimerMode.stopwatch) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'DURATION',
+              style: TextStyle(
+                fontFamily: GoogleFonts.nunito().fontFamily,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.onSurface,
+                letterSpacing: 1.2,
+              ),
+            ),
+            Text(
+              '${_duration.toInt()}m',
+              style: TextStyle(
+                fontFamily: GoogleFonts.nunito().fontFamily,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SliderTheme(
+          data: SliderThemeData(
+            activeTrackColor: AppColors.primary,
+            inactiveTrackColor: AppColors.surfaceContainer,
+            thumbColor: AppColors.primary,
+            overlayColor: AppColors.primary.withValues(alpha: 0.1),
+            trackHeight: 6,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          ),
+          child: Slider(
+            value: _duration,
+            min: 5,
+            max: 120,
+            divisions: 23,
+            onChanged: _onDurationChanged,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildDurationPreset(25),
+            const SizedBox(width: 8),
+            _buildDurationPreset(45),
+            const SizedBox(width: 8),
+            _buildDurationPreset(60),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationPreset(int minutes) {
+    final isSelected = _duration.toInt() == minutes;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onDurationChanged(minutes.toDouble()),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: isSelected
+                ? null
+                : Border.all(color: AppColors.surfaceContainerHighest),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$minutes',
+            style: TextStyle(
+              fontFamily: GoogleFonts.nunito().fontFamily,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: isSelected ? Colors.white : AppColors.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleRow(String label, bool value, ValueChanged<bool> onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: GoogleFonts.nunito().fontFamily,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppColors.onSurface,
+          ),
+        ),
+        GestureDetector(
+          onTap: () => onChanged(!value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 44,
+            height: 24,
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: value ? AppColors.primary : AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 200),
+              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Handlers ─────────────────────────────────────────────────
+  void _onModeChanged(TimerMode mode) {
+    if (_isSessionActive) return;
+    setState(() {
+      _selectedMode = mode;
+      if (mode == TimerMode.stopwatch) {
+        _timeRemaining = 0;
+        _totalTime = 0;
+      } else {
+        _totalTime = (_duration * 60).toInt();
+        _timeRemaining = _totalTime;
+      }
+    });
+  }
+
+  void _onDurationChanged(double value) {
+    if (_isSessionActive) return;
+    setState(() {
+      _duration = value;
+      _totalTime = (value * 60).toInt();
+      _timeRemaining = _totalTime;
+    });
+  }
 
   // ── Deep Focus Mode Label ─────────────────────────────────────
   Widget _buildFocusModeLabel(AppLocalizations? l10n) {
@@ -267,8 +820,8 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
           const SizedBox(width: 6),
           Text(
             l10n?.deepFocusMode ?? 'Deep Focus Mode',
-            style: const TextStyle(
-              fontFamily: 'Inter',
+            style: TextStyle(
+              fontFamily: GoogleFonts.nunito().fontFamily,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppColors.primary,
@@ -285,10 +838,10 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
     return Text(
       l10n?.stayPresent ?? 'Stay present.',
       textAlign: TextAlign.center,
-      style: const TextStyle(
-        fontFamily: 'Manrope',
+      style: TextStyle(
+        fontFamily: GoogleFonts.nunito().fontFamily,
         fontSize: 56,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         letterSpacing: 1,
         color: AppColors.onSurface,
       ),
@@ -367,7 +920,7 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
                       AnimatedDefaultTextStyle(
                         duration: const Duration(milliseconds: 200),
                         style: TextStyle(
-                          fontFamily: 'Manrope',
+                          fontFamily: GoogleFonts.nunito().fontFamily,
                           fontSize: timeFontSize,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1,
@@ -378,15 +931,17 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
                       const SizedBox(height: 4),
                       Text(
                         _isSessionActive
-                            ? (l10n?.minutesRemaining ?? 'Minutes')
+                            ? (_selectedMode == TimerMode.stopwatch
+                                ? 'Minutes Elapsed'
+                                : (l10n?.minutesRemaining ?? 'Minutes Remaining'))
                             : (l10n?.readyToStart ?? 'Ready to Start'),
                         style: TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: GoogleFonts.nunito().fontFamily,
                           fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           color: _isSessionActive
                               ? AppColors.primary
-                              : AppColors.onSurfaceVariant,
+                              : AppColors.onSurface,
                           letterSpacing: 1,
                         ),
                       ),
@@ -462,8 +1017,8 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             const SizedBox(width: 12),
             Text(
               l10n?.startSession ?? 'Start Session',
-              style: const TextStyle(
-                fontFamily: 'Inter',
+              style: TextStyle(
+                fontFamily: GoogleFonts.nunito().fontFamily,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -491,8 +1046,8 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             const SizedBox(width: 12),
             Text(
               l10n?.pause ?? 'Pause',
-              style: const TextStyle(
-                fontFamily: 'Inter',
+              style: TextStyle(
+                fontFamily: GoogleFonts.nunito().fontFamily,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.onSurface,
@@ -531,8 +1086,8 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
             const SizedBox(width: 12),
             Text(
               l10n?.resume ?? 'Resume',
-              style: const TextStyle(
-                fontFamily: 'Inter',
+              style: TextStyle(
+                fontFamily: GoogleFonts.nunito().fontFamily,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -558,143 +1113,6 @@ class _FocusSessionScreenState extends ConsumerState<FocusSessionScreen>
           Icons.refresh,
           color: AppColors.onSurfaceVariant,
           size: 24,
-        ),
-      ),
-    );
-  }
-
-  // ── Current Task Card ────────────────────────────────────────
-  Widget _buildCurrentTaskCard(AppLocalizations? l10n) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 500),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  l10n?.currentTask ?? 'Current Task',
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.onSurface,
-                  ),
-                ),
-                const Text(
-                  'Task 3 of 8',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(12),
-                border: const Border(
-                  left: BorderSide(
-                    color: AppColors.primary,
-                    width: 4,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    margin: const EdgeInsets.only(right: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(
-                      Icons.task_alt,
-                      size: 18,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Design System Documentation',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Focusing on color architecture and tonal layering rules.',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            color: AppColors.onSurfaceVariant,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            _buildTag('Design'),
-                            _buildTag('Priority 1'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTag(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: AppColors.onSurfaceVariant,
-          letterSpacing: 1,
         ),
       ),
     );

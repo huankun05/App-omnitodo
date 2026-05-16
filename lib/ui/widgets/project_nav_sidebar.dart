@@ -89,16 +89,27 @@ class ProjectNavSidebar extends ConsumerWidget {
               ),
               const SizedBox(height: 20),
 
-              // All Tasks 行
+              // To Do 行（不含已完成任务）
               _ProjectNavItem(
                 icon: Icons.layers_outlined,
-                label: 'All Tasks',
+                label: 'To Do',
                 color: const Color(0xFF2563EB),
-                count: _totalCount(tasksAsync),
+                count: _pendingCount(tasksAsync),
                 isSelected: selectedId == null,
                 onTap: () => ref.read(selectedProjectIdProvider.notifier).state = null,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
+
+              // Completed 行
+              _ProjectNavItem(
+                icon: Icons.check_circle_outline,
+                label: 'Completed',
+                color: const Color(0xFF10B981),
+                count: _completedCount(tasksAsync),
+                isSelected: selectedId == '__completed__',
+                onTap: () => ref.read(selectedProjectIdProvider.notifier).state = '__completed__',
+              ),
+              const SizedBox(height: 4),
 
               // 分割线
               Container(
@@ -182,7 +193,7 @@ class ProjectNavSidebar extends ConsumerWidget {
                               ),
                               child: Icon(
                                 Icons.folder_open,
-                                color: Color(0xFF94A3B8),
+                                color: Color(0xFF64748B),
                                 size: 24,
                               ),
                             ),
@@ -192,7 +203,7 @@ class ProjectNavSidebar extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF64748B),
+                                color: Color(0xFF334155),
                               ),
                             ),
                             SizedBox(height: 4),
@@ -200,7 +211,7 @@ class ProjectNavSidebar extends ConsumerWidget {
                               'Tap + to create one',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Color(0xFF94A3B8),
+                                color: Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -221,7 +232,7 @@ class ProjectNavSidebar extends ConsumerWidget {
                           child: _ProjectNavItem(
                             icon: Icons.folder_off_outlined,
                             label: 'Uncategorized',
-                            color: const Color(0xFF94A3B8),
+                            color: const Color(0xFF64748B),
                             count: uncategorizedCount,
                             isSelected: selectedId == '__uncategorized__',
                             onTap: () => ref.read(selectedProjectIdProvider.notifier).state = '__uncategorized__',
@@ -307,13 +318,23 @@ class ProjectNavSidebar extends ConsumerWidget {
     );
   }
 
-  int _totalCount(AsyncValue<List<Task>> tasksAsync) {
-    return tasksAsync.valueOrNull?.where((t) => t.deletedAt == null).length ?? 0;
+  int _pendingCount(AsyncValue<List<Task>> tasksAsync) {
+    return tasksAsync.valueOrNull
+            ?.where((t) => !t.isCompleted && t.deletedAt == null)
+            .length ??
+        0;
   }
 
   int _projectCount(AsyncValue<List<Task>> tasksAsync, String projectId) {
     return tasksAsync.valueOrNull
             ?.where((t) => t.projectId == projectId && t.deletedAt == null)
+            .length ??
+        0;
+  }
+
+  int _completedCount(AsyncValue<List<Task>> tasksAsync) {
+    return tasksAsync.valueOrNull
+            ?.where((t) => t.isCompleted && t.deletedAt == null)
             .length ??
         0;
   }
@@ -549,7 +570,7 @@ class _SmallIconBtn extends StatelessWidget {
           child: Icon(
             icon,
             size: 14,
-            color: color ?? const Color(0xFF94A3B8),
+            color: color ?? const Color(0xFF64748B),
           ),
         ),
       ),
@@ -690,10 +711,10 @@ class _ProjectDialogState extends State<_ProjectDialog> {
                 labelText: 'Project Name',
                 labelStyle: const TextStyle(
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF64748B),
+                  color: Color(0xFF334155),
                 ),
                 hintText: 'Enter project name...',
-                hintStyle: TextStyle(color: const Color(0xFF94A3B8)),
+                hintStyle: TextStyle(color: const Color(0xFF64748B)),
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
@@ -775,7 +796,7 @@ class _ProjectDialogState extends State<_ProjectDialog> {
                     'Cancel',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
+                      color: Color(0xFF334155),
                     ),
                   ),
                 ),

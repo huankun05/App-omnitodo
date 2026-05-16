@@ -178,6 +178,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _focusedMonth = DateTime.now();
   List<TimePoint> _timePoints = [];
   final Map<String, List<Task>> _tasksByTimePoint = {};
+  String? _draggingTaskId;
 
   static const _tpStorageKey = 'omni_time_points';
 
@@ -287,29 +288,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return bestId;
   }
 
-  void _moveTaskToGroup(String taskId, String fromGroupId, String toGroupId, int newIndex) {
+  void _moveTaskToGroup(String taskId, String fromGroupId, String toGroupId, int insertBeforeIndex) {
+    final fromList = _tasksByTimePoint[fromGroupId];
+    if (fromList == null) return;
+    final taskIdx = fromList.indexWhere((t) => t.id == taskId);
+    if (taskIdx < 0) return;
+
+    final task = fromList.removeAt(taskIdx);
+
     if (fromGroupId == toGroupId) {
-      // within-group reorder
-      final list = _tasksByTimePoint[fromGroupId];
-      if (list == null) return;
-      setState(() {
-        final oldIdx = list.indexWhere((t) => t.id == taskId);
-        if (oldIdx < 0) return;
-        final item = list.removeAt(oldIdx);
-        if (newIndex > oldIdx) newIndex--;
-        list.insert(newIndex, item);
-      });
+      // Same group: insertBeforeIndex is relative to the list AFTER removal
+      final toList = _tasksByTimePoint[fromGroupId]!;
+      toList.insert(insertBeforeIndex.clamp(0, toList.length), task);
     } else {
-      // cross-group move
-      final fromList = _tasksByTimePoint[fromGroupId];
+      // Cross-group: move to target group
       final toList = _tasksByTimePoint.putIfAbsent(toGroupId, () => []);
-      setState(() {
-        final oldIdx = fromList?.indexWhere((t) => t.id == taskId) ?? -1;
-        if (oldIdx < 0) return;
-        final item = fromList!.removeAt(oldIdx);
-        toList.insert(newIndex.clamp(0, toList.length), item);
-      });
+      toList.insert(insertBeforeIndex.clamp(0, toList.length), task);
     }
+    setState(() {});
   }
 
   List<Task> _getTasksForDate(List<Task> tasks, DateTime date) {
@@ -731,33 +727,42 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 8, left: 20),
-      itemCount: _timePoints.length,
-      itemBuilder: (context, index) {
-        final tp = _timePoints[index];
-        final tasks = _tasksByTimePoint[tp.id] ?? [];
-        final isLast = index == _timePoints.length - 1;
-        return _buildTimePointRow(tp, tasks, isLast, index);
-      },
+    return Row(
+      children: [
+        // Continuous timeline line
+        Container(
+          width: 2,
+          color: AppColors.primary.withValues(alpha: 0.2),
+        ),
+        const SizedBox(width: 10),
+        // Content
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 8),
+            itemCount: _timePoints.length,
+            itemBuilder: (context, index) {
+              final tp = _timePoints[index];
+              final tasks = _tasksByTimePoint[tp.id] ?? [];
+              final isLast = index == _timePoints.length - 1;
+              return _buildDraggableTimeSection(tp, tasks, isLast);
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildTimePointRow(TimePoint tp, List<Task> tasks, bool isLast, int index) {
+  Widget _buildDraggableTimeSection(TimePoint tp, List<Task> tasks, bool isLast) {
     final displayLabel = tp.label.isNotEmpty ? tp.label : tp.time;
-    return GestureDetector(
-      // Tap on the dot area to create a task at this time point
-      onDoubleTap: () => _showCreateTaskAtTimePoint(tp),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timeline: continuous line + dot
-          SizedBox(
-            width: 20,
-            child: Column(
+    return Column(
+      children: [
+        // Group header
+        GestureDetector(
+          onDoubleTap: () => _showCreateTaskAtTimePoint(tp),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
               children: [
-                const SizedBox(height: 6),
-                // Dot
                 Container(
                   width: 10,
                   height: 10,
@@ -766,109 +771,177 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     shape: BoxShape.circle,
                   ),
                 ),
-                // Continuous line (or gap for last item)
-                if (!isLast)
-                  Container(
-                    width: 2,
-                    height: 60,
-                    color: AppColors.primary.withValues(alpha: 0.25),
-                  )
-                else
-                  const SizedBox(height: 60),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Tasks group
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Group label + actions
-                Row(
-                  children: [
-                    Text(
-                      displayLabel.toUpperCase(),
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.outline,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        height: 1,
-                        color: AppColors.outlineVariant.withValues(alpha: 0.15),
-                      ),
-                    ),
-                    _buildTimePointActions(tp),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Task cards
-                if (tasks.isNotEmpty)
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: tasks.length,
-                    onReorder: (oldIndex, newIndex) {
-                      _moveTaskToGroup(tasks[oldIndex].id, tp.id, tp.id, newIndex);
-                    },
-                    itemBuilder: (context, index) {
-                      return _CompactTaskCard(
-                        key: ValueKey(tasks[index].id),
-                        task: tasks[index],
-                        categoryColor: _categoryColor,
-                        tagColor: (name) => ref.read(tagProviderProvider).colorForTag(name),
-                      );
-                    },
-                    proxyDecorator: (child, index, animation) {
-                      return Material(
-                        color: Colors.transparent,
-                        child: child,
-                      );
-                    },
-                  )
-                else
-                  GestureDetector(
-                    onTap: () => _showCreateTaskAtTimePoint(tp),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(Icons.add_rounded, size: 14, color: AppColors.outline.withValues(alpha: 0.4)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Add task',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              color: AppColors.outline.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                const SizedBox(width: 10),
+                Text(
+                  displayLabel.toUpperCase(),
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.outline,
+                    letterSpacing: 1.5,
                   ),
-                const SizedBox(height: 8),
-                // Clickable gap to add new time point after this one
-                GestureDetector(
-                  onTap: () => _showAddTimePointDialog(afterIndex: index),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
                   child: Container(
-                    height: 20,
-                    width: double.infinity,
-                    color: Colors.transparent,
+                    height: 1,
+                    color: AppColors.outlineVariant.withValues(alpha: 0.15),
                   ),
                 ),
+                _buildTimePointActions(tp),
               ],
             ),
           ),
-        ],
+        ),
+        // Task cards with drag-and-drop
+        if (tasks.isNotEmpty)
+          ...List.generate(tasks.length, (i) {
+            return _buildDraggableTaskCard(
+              task: tasks[i],
+              groupId: tp.id,
+              index: i,
+              isFirst: i == 0,
+              isLastInGroup: i == tasks.length - 1,
+            );
+          })
+        else
+          DragTarget<Task>(
+            onWillAcceptWithDetails: (details) => true,
+            onAcceptWithDetails: (details) {
+              final draggedTask = details.data;
+              final fromGroupId = _findTaskGroup(draggedTask.id);
+              if (fromGroupId == null) return;
+              _moveTaskToGroup(draggedTask.id, fromGroupId, tp.id, 0);
+            },
+            builder: (context, candidateData, rejectedData) {
+              final isHovered = candidateData.isNotEmpty;
+              return GestureDetector(
+                onTap: () => _showCreateTaskAtTimePoint(tp),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: isHovered
+                      ? BoxDecoration(
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        )
+                      : null,
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_rounded, size: 14, color: AppColors.outline.withValues(alpha: 0.4)),
+                      const SizedBox(width: 4),
+                      Text(
+                        isHovered ? 'Drop here' : 'Add task',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          color: isHovered
+                              ? AppColors.primary
+                              : AppColors.outline.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        // Connecting line
+        if (!isLast)
+          Container(
+            width: 2,
+            height: 8,
+            color: AppColors.primary.withValues(alpha: 0.2),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDraggableTaskCard({
+    required Task task,
+    required String groupId,
+    required int index,
+    required bool isFirst,
+    required bool isLastInGroup,
+  }) {
+    final isDragging = _draggingTaskId == task.id;
+
+    return LongPressDraggable<Task>(
+      data: task,
+      onDragStarted: () => setState(() => _draggingTaskId = task.id),
+      onDragEnd: (_) => setState(() => _draggingTaskId = null),
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: 220,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(10),
+            border: Border(
+              left: BorderSide(color: AppColors.primary, width: 3),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.onSurface.withValues(alpha: 0.12),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: _MarqueeTaskCard(
+            task: task,
+            tagColor: (name) => ref.read(tagProviderProvider).colorForTag(name),
+          ),
+        ),
+      ),
+      childWhenDragging: const SizedBox.shrink(),
+      child: DragTarget<Task>(
+        onWillAcceptWithDetails: (details) {
+          return details.data.id != task.id;
+        },
+        onAcceptWithDetails: (details) {
+          final draggedTask = details.data;
+          final fromGroupId = _findTaskGroup(draggedTask.id);
+          if (fromGroupId == null) return;
+          _moveTaskToGroup(draggedTask.id, fromGroupId, groupId, index);
+        },
+        builder: (context, candidateData, rejectedData) {
+          final isHovered = candidateData.isNotEmpty;
+          if (isDragging) {
+            return const SizedBox(height: 8);
+          }
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: EdgeInsets.only(
+              top: isFirst ? 2 : 0,
+              bottom: isLastInGroup ? 4 : 2,
+            ),
+            decoration: isHovered
+                ? BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: AppColors.primary, width: 2),
+                    ),
+                  )
+                : null,
+            child: _MarqueeTaskCard(
+              task: task,
+              tagColor: (name) => ref.read(tagProviderProvider).colorForTag(name),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  String? _findTaskGroup(String taskId) {
+    for (final entry in _tasksByTimePoint.entries) {
+      if (entry.value.any((t) => t.id == taskId)) return entry.key;
+    }
+    return null;
   }
 
   void _showCreateTaskAtTimePoint(TimePoint tp) {
@@ -1539,16 +1612,57 @@ class _TaskDots extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════
 // 紧凑任务卡片（标题 + 标签）
 // ═══════════════════════════════════════════════════════════════
-class _CompactTaskCard extends StatelessWidget {
+// ── 时间轴条目 ──────────────────────────────────────────
+
+// ── 带跑马灯效果的任务卡片 ──────────────────────────────
+
+class _MarqueeTaskCard extends StatefulWidget {
   final Task task;
-  final Color Function(String) categoryColor;
   final Color Function(String) tagColor;
-  const _CompactTaskCard({
+  const _MarqueeTaskCard({
     super.key,
     required this.task,
-    required this.categoryColor,
     required this.tagColor,
   });
+
+  @override
+  State<_MarqueeTaskCard> createState() => _MarqueeTaskCardState();
+}
+
+class _MarqueeTaskCardState extends State<_MarqueeTaskCard> {
+  bool _isHovered = false;
+  final ScrollController _titleScroll = ScrollController();
+  final ScrollController _tagsScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _titleScroll.dispose();
+    _tagsScroll.dispose();
+    super.dispose();
+  }
+
+  void _startMarquee(ScrollController controller) {
+    if (!controller.hasClients) return;
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!_isHovered || !mounted) return;
+      _animateScroll(controller);
+    });
+  }
+
+  void _animateScroll(ScrollController controller) async {
+    if (!controller.hasClients || !_isHovered) return;
+    final maxScroll = controller.position.maxScrollExtent;
+    if (maxScroll <= 0) return;
+    await controller.animateTo(
+      maxScroll,
+      duration: Duration(milliseconds: (maxScroll * 15).toInt().clamp(800, 3000)),
+      curve: Curves.linear,
+    );
+    if (!_isHovered || !mounted) return;
+    controller.jumpTo(0);
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (_isHovered && mounted) _animateScroll(controller);
+  }
 
   String _cap(String s) {
     if (s.isEmpty) return s;
@@ -1557,59 +1671,115 @@ class _CompactTaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tagNames = task.category
+    final tagNames = widget.task.category
         .split('|')
         .where((t) => t.trim().isNotEmpty)
         .map((t) => t.trim())
         .toList();
-    if (task.priority != 'low') tagNames.add(task.priority);
+    if (widget.task.priority != 'low') tagNames.add(widget.task.priority);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(10),
-          border: Border(
-            left: BorderSide(
-              color: categoryColor(task.category),
-              width: 3,
-            ),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.onSurface.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              task.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.onSurface,
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _isHovered = true);
+        _startMarquee(_titleScroll);
+        if (tagNames.isNotEmpty) _startMarquee(_tagsScroll);
+      },
+      onExit: (_) {
+        setState(() => _isHovered = false);
+        if (_titleScroll.hasClients) _titleScroll.jumpTo(0);
+        if (_tagsScroll.hasClients) _tagsScroll.jumpTo(0);
+      },
+      child: FractionallySizedBox(
+        widthFactor: 0.85,
+        child: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(10),
+            border: Border(
+              left: BorderSide(
+                color: widget.tagColor(widget.task.category.isNotEmpty
+                    ? widget.task.category.split('|').first.trim()
+                    : 'default'),
+                width: 3,
               ),
             ),
-            if (tagNames.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: tagNames.map((t) {
-                  return _Tag(_cap(t), color: tagColor(t));
-                }).toList(),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.onSurface.withValues(alpha: 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
             ],
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title line with marquee
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return NotificationListener<ScrollNotification>(
+                    onNotification: (_) => true,
+                    child: SingleChildScrollView(
+                      controller: _titleScroll,
+                      scrollDirection: Axis.horizontal,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                        child: Text(
+                          widget.task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              // Tags line with marquee
+              if (tagNames.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final tagWidgets = tagNames
+                        .take(5)
+                        .map((t) => _Tag(_cap(t), color: widget.tagColor(t)))
+                        .toList();
+                    return NotificationListener<ScrollNotification>(
+                      onNotification: (_) => true,
+                      child: SingleChildScrollView(
+                        controller: _tagsScroll,
+                        scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ...tagWidgets,
+                            if (_isHovered) ...[
+                              const SizedBox(width: 4),
+                              ...tagNames.skip(5).map((t) => Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: _Tag(_cap(t), color: widget.tagColor(t)),
+                                  )),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
         ),
       ),
     );

@@ -44,6 +44,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // ── Tab 导航 ─────────────────────────────────────────────
   int _selectedTabIndex = 0;
 
+  // ── 延时完成 ──────────────────────────────────────────────
+  final Map<String, Timer> _pendingCompleteTimers = {};
+  static const _completeDelaySeconds = 10;
+
   // ── 多选操作 ───────────────────────────────────────────────
   final Set<String> _selectedTaskIds = {};
   bool _isMultiSelectMode = false;
@@ -103,6 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
+
     // 波纹动画
     _rippleController = AnimationController(
       duration: const Duration(seconds: 8),
@@ -147,6 +152,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _floatController.dispose();
     _fadeController.dispose();
     _drawerController.dispose();
+    for (final timer in _pendingCompleteTimers.values) {
+      timer.cancel();
+    }
     super.dispose();
   }
 
@@ -182,6 +190,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         _searchResults = results;
         _isSearching = false;
       });
+    });
+  }
+
+  void _toggleTaskCompletionDelayed(Task task) {
+    final id = task.id;
+    final willComplete = !task.isCompleted;
+
+    // 如果正在取消中，立即恢复完成状态
+    if (_pendingCompleteTimers.containsKey(id)) {
+      _pendingCompleteTimers[id]!.cancel();
+      _pendingCompleteTimers.remove(id);
+      ref.read(taskNotifierProvider.notifier).toggleTaskCompletion(id);
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      return;
+    }
+
+    // 如果要取消完成（uncomplete），立即执行
+    if (!willComplete) {
+      ref.read(taskNotifierProvider.notifier).toggleTaskCompletion(id);
+      return;
+    }
+
+    // 延时完成：先在 UI 上标记为完成，10s 后才持久化
+    ref.read(taskNotifierProvider.notifier).toggleTaskCompletion(id);
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    int remaining = _completeDelaySeconds;
+    final snackBar = SnackBar(
+      duration: Duration(seconds: _completeDelaySeconds + 1),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+      content: StatefulBuilder(
+        builder: (context, setSnackBarState) {
+          return Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Task completed (${remaining}s to undo)',
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  _pendingCompleteTimers[id]?.cancel();
+                  _pendingCompleteTimers.remove(id);
+                  ref.read(taskNotifierProvider.notifier).toggleTaskCompletion(id);
+                },
+                child: const Text('Undo', style: TextStyle(color: Colors.white70)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+
+    _pendingCompleteTimers[id] = Timer.periodic(const Duration(seconds: 1), (timer) {
+      remaining--;
+      if (remaining <= 0) {
+        timer.cancel();
+        _pendingCompleteTimers.remove(id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        }
+      }
     });
   }
 
@@ -225,6 +304,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    // 切换到 Completed 时，若当前是 Expired tab 则自动切回 All
+    ref.listen<String?>(selectedProjectIdProvider, (prev, next) {
+      if (next == '__completed__' && _selectedTabIndex == 2) {
+        setState(() => _selectedTabIndex = 0);
+      }
+    });
+
     final tasksAsync = ref.watch(taskNotifierProvider);
     final focusStatsAsync = ref.watch(focusNotifierProvider);
     final screenWidth = MediaQuery.of(context).size.width;
@@ -400,7 +486,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w400,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFF334155),
                   ),
                 ),
               ],
@@ -503,14 +589,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
         // 先按项目过滤
         var filteredTasks = selectedProjectId == null
-            ? tasks
-            : (selectedProjectId == '__uncategorized__'
-                ? tasks.where((t) => t.projectId == null).toList()
-                : tasks.where((t) => t.projectId == selectedProjectId).toList());
+            ? tasks.where((t) => !t.isCompleted).toList()
+            : (selectedProjectId == '__completed__'
+                ? tasks.where((t) => t.isCompleted).toList()
+                : (selectedProjectId == '__uncategorized__'
+                    ? tasks.where((t) => t.projectId == null).toList()
+                    : tasks.where((t) => t.projectId == selectedProjectId).toList()));
 
         // 再按 Tab 过滤
         switch (_selectedTabIndex) {
-          case 0: // All - 所有未删除任务（合并 Active + Completed）
+          case 0: // All - 所有未删除任务
             break;
           case 1: // Important - 收藏的任务
             filteredTasks = filteredTasks.where((t) => t.isStarred).toList();
@@ -533,32 +621,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           return _buildNoSearchResults();
         }
 
-        return SingleChildScrollView(
-          child: _buildTaskList(
-            displayTasks,
-            displayTasks.isEmpty,
-            tabLabel: _getTabLabel(_selectedTabIndex),
-          ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final hasBoundedHeight = constraints.maxHeight != double.infinity;
+            final taskList = _buildTaskList(
+              displayTasks,
+              displayTasks.isEmpty,
+              tabLabel: _getTabLabel(_selectedTabIndex),
+              scrollable: hasBoundedHeight,
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: _buildTabAndSortBar(),
+                ),
+                const SizedBox(height: 20),
+                if (hasBoundedHeight)
+                  Expanded(child: taskList)
+                else
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 80),
+                    child: taskList,
+                  ),
+              ],
+            );
+          },
         );
       },
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isBounded = constraints.maxHeight != double.infinity;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              constraints: const BoxConstraints(maxWidth: 1280),
-              child: _buildTabAndSortBar(),
-            ),
-            const SizedBox(height: 20),
-            if (isBounded) Expanded(child: listContent) else listContent,
-          ],
-        );
-      },
-    );
+    return listContent;
   }
 
   String _getTabLabel(int index) {
@@ -580,35 +674,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildTrashTaskList(String? selectedProjectId) {
     final trashTasksAsync = ref.watch(trashNotifierProvider);
 
-    return trashTasksAsync.when(
-      loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(
-            color: Color(0xFF3B82F6),
-            strokeWidth: 3,
-          ),
-        ),
-      ),
-      error: (error, stack) => _buildErrorState(error.toString()),
-      data: (allTasks) {
-        // 过滤回收站任务
-        var trashTasks = allTasks.where((t) => t.deletedAt != null).toList();
+    Widget body;
+    switch (trashTasksAsync) {
+      case AsyncData(:final value):
+        // 过滤回收站任务（交叉筛选：project × trash）
+        var trashTasks = value.where((t) => t.deletedAt != null).toList();
 
-        // 按项目过滤
-        if (selectedProjectId != null) {
-          trashTasks = selectedProjectId == '__uncategorized__'
-              ? trashTasks.where((t) => t.projectId == null).toList()
-              : trashTasks.where((t) => t.projectId == selectedProjectId).toList();
+        if (selectedProjectId == null) {
+          // To Do: 未完成的回收站任务
+          trashTasks = trashTasks.where((t) => !t.isCompleted).toList();
+        } else if (selectedProjectId == '__completed__') {
+          // Completed: 已完成的回收站任务
+          trashTasks = trashTasks.where((t) => t.isCompleted).toList();
+        } else if (selectedProjectId == '__uncategorized__') {
+          trashTasks = trashTasks.where((t) => t.projectId == null).toList();
+        } else {
+          trashTasks = trashTasks.where((t) => t.projectId == selectedProjectId).toList();
         }
 
         final displayTasks = _applySort(trashTasks);
 
-        // Trash 空时也用内嵌空卡片显示
-        return SingleChildScrollView(
-          child: _buildTaskList(displayTasks, displayTasks.isEmpty, tabLabel: 'Trash'),
+        body = LayoutBuilder(
+          builder: (context, constraints) {
+            final hasBoundedHeight = constraints.maxHeight != double.infinity;
+            final taskList = _buildTaskList(
+              displayTasks,
+              displayTasks.isEmpty,
+              tabLabel: 'Trash',
+              scrollable: hasBoundedHeight,
+            );
+            return hasBoundedHeight
+                ? Expanded(child: taskList)
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 80),
+                    child: taskList,
+                  );
+          },
         );
-      },
+        break;
+      case AsyncError(:final error):
+        body = _buildErrorState(error.toString());
+        break;
+      default:
+        body = const Center(
+          child: Padding(
+            padding: EdgeInsets.all(40),
+            child: CircularProgressIndicator(
+              color: Color(0xFF3B82F6),
+              strokeWidth: 3,
+            ),
+          ),
+        );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 1280),
+          child: _buildTabAndSortBar(),
+        ),
+        const SizedBox(height: 20),
+        body,
+      ],
     );
   }
 
@@ -616,6 +744,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // Tab 导航 + 排序栏
   // ══════════════════════════════════════════════════════════════
   Widget _buildTabAndSortBar() {
+    final isCompletedProject = ref.read(selectedProjectIdProvider) == '__completed__';
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -633,7 +763,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   children: [
                     _buildTabItem('All', Icons.list_alt, 0),
                     _buildTabItem('Important', Icons.star_outline, 1),
-                    _buildTabItem('Expired', Icons.warning_amber_outlined, 2),
+                    if (!isCompletedProject)
+                      _buildTabItem('Expired', Icons.warning_amber_outlined, 2),
                     _buildTabItem('Trash', Icons.delete_outline, 3),
                   ],
                 ),
@@ -753,7 +884,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
+                      color: Color(0xFF334155),
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -764,7 +895,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             const Icon(
               Icons.keyboard_arrow_down,
               size: 16,
-              color: Color(0xFF64748B),
+              color: Color(0xFF334155),
             ),
           ],
         ),
@@ -814,7 +945,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Icon(
               isSelected ? Icons.check_circle : Icons.circle_outlined,
               size: 18,
-              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFCBD5E1),
+              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF94A3B8),
             ),
             const SizedBox(width: 12),
             Text(
@@ -897,7 +1028,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // ══════════════════════════════════════════════════════════════
   // 任务列表
   // ══════════════════════════════════════════════════════════════
-  Widget _buildTaskList(List<Task> tasks, bool isEmpty, {String tabLabel = 'Tasks'}) {
+  Widget _buildTaskList(List<Task> tasks, bool isEmpty, {String tabLabel = 'Tasks', bool scrollable = false}) {
     if (isEmpty || tasks == null || tasks.isEmpty) {
       return _buildEmptyTaskList(tabLabel);
     }
@@ -1020,8 +1151,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         const SizedBox(height: 16),
         ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+          shrinkWrap: !scrollable,
+          physics: scrollable
+              ? const AlwaysScrollableScrollPhysics()
+              : const NeverScrollableScrollPhysics(),
+          padding: scrollable ? const EdgeInsets.only(bottom: 80) : null,
           itemCount: tasks.length,
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
@@ -1029,7 +1163,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             final isOverdue = task.dueDate != null &&
                 DateTime.parse(task.dueDate!).isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)) &&
                 !task.isCompleted;
-            
+
             return _buildModernTaskCard(task, isOverdue, index, isTrash: isTrash, isExpired: isExpired);
           },
         ),
@@ -1126,7 +1260,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           if (direction == DismissDirection.startToEnd) {
             ref.read(taskNotifierProvider.notifier).moveToTrash(task.id);
           } else {
-            ref.read(taskNotifierProvider.notifier).toggleTaskCompletion(task.id);
+            _toggleTaskCompletionDelayed(task);
           }
         }
       },
@@ -1201,7 +1335,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     const SizedBox(height: 2),
                     if (!isTrash)
                       GestureDetector(
-                        onTap: () => ref.read(taskNotifierProvider.notifier).toggleTaskCompletion(task.id),
+                        onTap: () => _toggleTaskCompletionDelayed(task),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           width: 24,
@@ -1210,7 +1344,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             shape: BoxShape.circle,
                             color: task.isCompleted ? const Color(0xFF10B981) : Colors.transparent,
                             border: Border.all(
-                              color: task.isCompleted ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                              color: task.isCompleted ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
                               width: 2,
                             ),
                           ),
@@ -1301,7 +1435,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
-                            color: Color(0xFF94A3B8),
+                            color: Color(0xFF64748B),
                           ),
                         ),
                       ],
@@ -1321,7 +1455,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ),
                       child: Icon(
                         task.isStarred ? Icons.star : Icons.star_border,
-                        color: task.isStarred ? const Color(0xFFF59E0B) : const Color(0xFFCBD5E1),
+                        color: task.isStarred ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
                         size: 20,
                       ),
                     ),
@@ -1584,7 +1718,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               subtitle,
               style: const TextStyle(
                 fontSize: 14,
-                color: Color(0xFF64748B),
+                color: Color(0xFF334155),
                 height: 1.5,
               ),
               textAlign: TextAlign.center,
@@ -1688,7 +1822,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           ),
                           child: const Icon(
                             Icons.folder_off_outlined,
-                            color: Color(0xFF94A3B8),
+                            color: Color(0xFF64748B),
                             size: 20,
                           ),
                         ),
@@ -1848,7 +1982,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           ),
                           child: const Icon(
                             Icons.folder_off_outlined,
-                            color: Color(0xFF94A3B8),
+                            color: Color(0xFF64748B),
                             size: 20,
                           ),
                         ),
@@ -1959,7 +2093,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               'No results for "$_searchQuery"',
               style: const TextStyle(
                 fontSize: 16,
-                color: Color(0xFF64748B),
+                color: Color(0xFF334155),
               ),
             ),
             const SizedBox(height: 8),
@@ -1982,7 +2116,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             const Icon(
               Icons.cloud_off_outlined,
               size: 48,
-              color: Color(0xFF94A3B8),
+              color: Color(0xFF64748B),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -1998,7 +2132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               error,
               style: const TextStyle(
                 fontSize: 13,
-                color: Color(0xFF64748B),
+                color: Color(0xFF334155),
               ),
               textAlign: TextAlign.center,
             ),

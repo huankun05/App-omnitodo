@@ -385,7 +385,7 @@ class _NavItem extends StatelessWidget {
               icon,
               color: isActive
                   ? (isDark ? Colors.white : const Color(0xFF004AC6))
-                  : (isDark ? Colors.grey[600] : const Color(0xFF64748B)),
+                  : (isDark ? Colors.grey[600] : const Color(0xFF334155)),
               size: 24,
             ),
             const SizedBox(height: 4),
@@ -396,7 +396,7 @@ class _NavItem extends StatelessWidget {
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: isActive
                     ? (isDark ? Colors.white : const Color(0xFF004AC6))
-                    : (isDark ? Colors.grey[600] : const Color(0xFF64748B)),
+                    : (isDark ? Colors.grey[600] : const Color(0xFF334155)),
               ),
             ),
           ],
@@ -602,12 +602,12 @@ class _TopNavBarState extends ConsumerState<TopNavBar> with SingleTickerProvider
         decoration: InputDecoration(
           hintText: 'Search tasks...',
           hintStyle: TextStyle(
-            color: isDark ? Colors.grey[500] : const Color(0xFF64748B),
+            color: isDark ? Colors.grey[500] : const Color(0xFF334155),
             fontSize: 14,
           ),
           prefixIcon: Icon(
             Icons.search,
-            color: isDark ? Colors.grey[500] : const Color(0xFF64748B),
+            color: isDark ? Colors.grey[500] : const Color(0xFF334155),
             size: 20,
           ),
           border: OutlineInputBorder(
@@ -719,7 +719,7 @@ class _NavLink extends StatelessWidget {
               size: 20,
               color: isActive
                   ? (isDark ? Colors.white : const Color(0xFF004AC6))
-                  : (isDark ? Colors.grey[500] : const Color(0xFF64748B)),
+                  : (isDark ? Colors.grey[500] : const Color(0xFF334155)),
             ),
             const SizedBox(width: 8),
             Text(
@@ -729,7 +729,7 @@ class _NavLink extends StatelessWidget {
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                 color: isActive
                     ? (isDark ? Colors.white : const Color(0xFF004AC6))
-                    : (isDark ? Colors.grey[500] : const Color(0xFF64748B)),
+                    : (isDark ? Colors.grey[500] : const Color(0xFF334155)),
               ),
             ),
           ],
@@ -1004,7 +1004,7 @@ class _SideNavBarState extends ConsumerState<SideNavBar> with SingleTickerProvid
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w400,
-                          color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                          color: isDark ? Colors.grey[400] : const Color(0xFF334155),
                         ),
                       ),
                     ],
@@ -1062,7 +1062,7 @@ class _SideNavItem extends StatelessWidget {
                 size: 22,
                 color: isActive
                     ? (isDark ? Colors.white : const Color(0xFF004AC6))
-                    : (isDark ? Colors.grey[500] : const Color(0xFF64748B)),
+                    : (isDark ? Colors.grey[500] : const Color(0xFF334155)),
               ),
               if (isExpanded) ...[
                 const SizedBox(width: 12),
@@ -1073,7 +1073,7 @@ class _SideNavItem extends StatelessWidget {
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                     color: isActive
                         ? (isDark ? Colors.white : const Color(0xFF004AC6))
-                        : (isDark ? Colors.grey[500] : const Color(0xFF64748B)),
+                        : (isDark ? Colors.grey[500] : const Color(0xFF334155)),
                   ),
                 ),
               ],
@@ -1128,7 +1128,7 @@ class _ToggleButtonState extends State<_ToggleButton> {
             turns: widget.isExpanded ? 0.5 : 0,
             child: Icon(
               Icons.chevron_left,
-              color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+              color: isDark ? Colors.grey[400] : const Color(0xFF334155),
               size: 20,
             ),
           ),

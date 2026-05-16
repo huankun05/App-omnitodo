@@ -12,7 +12,11 @@ export class CategoriesRepository {
     });
   }
 
-  create(createCategoryDto: CreateCategoryDto, userId: string) {
+  async create(createCategoryDto: CreateCategoryDto, userId: string) {
+    const existing = await this.prisma.category.findFirst({
+      where: { name: createCategoryDto.name, userId },
+    });
+    if (existing) return existing;
     return this.prisma.category.create({
       data: {
         ...createCategoryDto,
