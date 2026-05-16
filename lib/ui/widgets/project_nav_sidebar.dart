@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../data/models/project_models.dart';
 import '../../data/models/task_models.dart';
 import '../../data/providers/project_provider.dart';
@@ -636,19 +637,40 @@ class _ProjectDialog extends StatefulWidget {
 
 class _ProjectDialogState extends State<_ProjectDialog> {
   late final TextEditingController _nameController;
-  late String _selectedColor;
+  String? _selectedColorHex;
+  double _hue = 217;
 
   static const _colorOptions = [
-    '#004AC6', '#2563EB', '#7C3AED', '#DB2777',
-    '#DC2626', '#EA580C', '#CA8A04', '#16A34A',
-    '#0D9488', '#64748B',
+    Color(0xFF004AC6),
+    Color(0xFF2563EB),
+    Color(0xFF7C3AED),
+    Color(0xFFDB2777),
+    Color(0xFFDC2626),
+    Color(0xFFEA580C),
+    Color(0xFFCA8A04),
+    Color(0xFF16A34A),
+    Color(0xFF0D9488),
+    Color(0xFF64748B),
   ];
+
+  Color get _currentColor {
+    if (_selectedColorHex != null) {
+      try {
+        return Color(int.parse(_selectedColorHex!.replaceFirst('#', '0xFF')));
+      } catch (_) {}
+    }
+    return _colorOptions[0];
+  }
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName ?? '');
-    _selectedColor = widget.initialColor ?? _colorOptions[0];
+    _selectedColorHex = widget.initialColor;
+    if (_selectedColorHex != null) {
+      final c = _currentColor;
+      _hue = HSLColor.fromColor(c).hue;
+    }
   }
 
   @override
@@ -657,185 +679,307 @@ class _ProjectDialogState extends State<_ProjectDialog> {
     super.dispose();
   }
 
+  String _colorToHex(Color c) =>
+      '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
   @override
   Widget build(BuildContext context) {
+    final currentColor = _currentColor;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dialogWidth = screenWidth > 600 ? 400.0 : screenWidth * 0.88;
+
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        width: 380,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 标题
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _parseColor(_selectedColor),
-                        _parseColor(_selectedColor).withValues(alpha: 0.7),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      elevation: 0,
+      backgroundColor: const Color(0xFFFFFFFF),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: dialogWidth),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          currentColor,
+                          currentColor.withAlpha(180),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: currentColor.withAlpha(50),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    child: Icon(
+                      widget.initialName == null
+                          ? Icons.create_new_folder_rounded
+                          : Icons.edit_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: Icon(
-                    widget.initialName == null ? Icons.create_new_folder : Icons.edit,
-                    color: Colors.white,
-                    size: 20,
+                  const SizedBox(width: 14),
+                  Text(
+                    widget.title,
+                    style: GoogleFonts.nunito(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1A1C1D),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1C1D),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // 项目名称输入
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              style: const TextStyle(fontSize: 15),
-              decoration: InputDecoration(
-                labelText: 'Project Name',
-                labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF334155),
-                ),
-                hintText: 'Enter project name...',
-                hintStyle: TextStyle(color: const Color(0xFF64748B)),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ],
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 22),
 
-            // 颜色选择
-            const Text(
-              'Choose Color',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: Color(0xFF334155),
+              // ── Name input ──
+              TextField(
+                controller: _nameController,
+                autofocus: true,
+                style: GoogleFonts.nunito(
+                    fontSize: 14, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
+                  hintText: 'Project name...',
+                  hintStyle: GoogleFonts.nunito(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF434655).withAlpha(150),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF3F3F6),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(
+                        color: Color(0xFFD8D8E0), width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(
+                        color: Color(0xFFD8D8E0), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF2563EB), width: 1.5),
+                  ),
+                ),
+                onSubmitted: (_) => _save(),
               ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _colorOptions.map((color) {
-                final c = _parseColor(color);
-                final isSelected = _selectedColor == color;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedColor = color),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: c,
-                      shape: BoxShape.circle,
-                      border: isSelected
-                          ? Border.all(color: Colors.white, width: 3)
-                          : null,
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 8),
-                            ]
-                          : [
+              const SizedBox(height: 20),
+
+              // ── Color picker (inline) ──
+              // Base color row
+              Row(
+                children: [
+                  for (final c in _colorOptions)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: GestureDetector(
+                        onTap: () {
+                          final hsl = HSLColor.fromColor(c);
+                          setState(() {
+                            _selectedColorHex = _colorToHex(c);
+                            _hue = hsl.hue;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: c,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _colorToHex(c) == _selectedColorHex
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                            boxShadow: [
                               BoxShadow(
-                                color: c.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+                                color: c.withAlpha(
+                                    _colorToHex(c) == _selectedColorHex ? 70 : 25),
+                                blurRadius:
+                                    _colorToHex(c) == _selectedColorHex ? 6 : 3,
                               ),
                             ],
+                          ),
+                          child: _colorToHex(c) == _selectedColorHex
+                              ? const Icon(Icons.check_rounded,
+                                  size: 14, color: Colors.white)
+                              : null,
+                        ),
+                      ),
                     ),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white, size: 18)
-                        : null,
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 28),
+                ],
+              ),
+              const SizedBox(height: 8),
 
-            // 操作按钮
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              // Hue slider
+              Row(
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: currentColor,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: currentColor.withAlpha(60),
+                          blurRadius: 4,
+                        ),
+                      ],
                     ),
                   ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF334155),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: Container(
+                            height: 12,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              gradient: LinearGradient(
+                                colors: List.generate(
+                                  36,
+                                  (i) =>
+                                      HSLColor.fromAHSL(1, i * 10.0, 1, 0.5)
+                                          .toColor(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: 12,
+                            thumbShape:
+                                const RoundSliderThumbShape(enabledThumbRadius: 8),
+                            overlayShape:
+                                const RoundSliderOverlayShape(overlayRadius: 14),
+                            activeTrackColor: Colors.transparent,
+                            inactiveTrackColor: Colors.transparent,
+                          ),
+                          child: Slider(
+                            value: _hue,
+                            min: 0,
+                            max: 360,
+                            onChanged: (v) {
+                              setState(() {
+                                _hue = v;
+                                final c = HSLColor.fromAHSL(1, v, 0.7, 0.55)
+                                    .toColor();
+                                _selectedColorHex = _colorToHex(c);
+                              });
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () {
-                    final name = _nameController.text.trim();
-                    if (name.isEmpty) return;
-                    widget.onSave(name, _selectedColor);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // ── Buttons ──
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFEFF2),
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.nunito(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF434655),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                    elevation: 0,
                   ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: GestureDetector(
+                      onTap: _save,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF2563EB),
+                              Color(0xFF4A8AF5),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.all(Radius.circular(9999)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x402563EB),
+                              blurRadius: 12,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Save',
+                            style: GoogleFonts.nunito(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Color _parseColor(String color) {
-    try {
-      return Color(int.parse(color.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      return const Color(0xFF004AC6);
-    }
+  void _save() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+    final color = _selectedColorHex ?? _colorToHex(_colorOptions[0]);
+    widget.onSave(name, color);
+    Navigator.pop(context);
   }
 }
 

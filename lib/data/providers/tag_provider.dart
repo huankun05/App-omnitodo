@@ -22,6 +22,8 @@ final tagProviderProvider = ChangeNotifierProvider<TagProvider>((ref) {
 class TagProvider extends ChangeNotifier {
   static const _hiddenKey = 'omni_hidden_tags';
   static const _uuid = Uuid();
+  static const builtinToday = 'Today';
+  static const builtinTodayColor = '#FF6750A4';
   final Ref _ref;
 
   TaskService? _taskService;
@@ -44,12 +46,30 @@ class TagProvider extends ChangeNotifier {
 
   Future<void> load() async {
     if (_taskService == null) return;
-    _allCategories = await _taskService!.getCategories();
+    final raw = await _taskService!.getCategories();
+    // 按 name 去重：保留第一个出现的
+    final seen = <String>{};
+    _allCategories = [];
+    for (final c in raw) {
+      if (seen.add(c.name.toLowerCase())) {
+        _allCategories.add(c);
+      }
+    }
+    // 确保内置 Today 标签始终存在
+    if (!_allCategories.any((c) => c.name == builtinToday)) {
+      _allCategories.insert(0, const Category(
+        id: '__builtin_today__',
+        name: builtinToday,
+        color: builtinTodayColor,
+      ));
+    }
     final prefs = await SharedPreferences.getInstance();
     final hiddenJson = prefs.getString(_hiddenKey);
     if (hiddenJson != null && hiddenJson.isNotEmpty) {
       _hiddenNames = Set<String>.from(jsonDecode(hiddenJson));
     }
+    // Today 不允许隐藏
+    _hiddenNames.remove(builtinToday);
     _loaded = true;
     notifyListeners();
   }
@@ -61,7 +81,8 @@ class TagProvider extends ChangeNotifier {
 
   Future<void> addTag(String name, {Color? color}) async {
     if (_taskService == null) return;
-    if (_allCategories.any((c) => c.name == name)) return;
+    if (name == builtinToday) return;
+    if (_allCategories.any((c) => c.name.toLowerCase() == name.toLowerCase())) return;
     final colorStr = color != null
         ? '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'
         : _hexForIndex(_allCategories.length);
@@ -73,6 +94,7 @@ class TagProvider extends ChangeNotifier {
 
   Future<void> removeTag(String name) async {
     if (_taskService == null) return;
+    if (name == builtinToday) return;
     final cat = _allCategories.cast<Category?>().firstWhere(
           (c) => c?.name == name, orElse: () => null);
     if (cat == null) return;
@@ -85,21 +107,22 @@ class TagProvider extends ChangeNotifier {
 
   Future<void> renameTag(String oldName, String newName) async {
     if (_taskService == null) return;
+    if (oldName == builtinToday) return;
     if (newName.isEmpty || newName == oldName) return;
-    if (_allCategories.any((c) => c.name == newName)) return;
+    if (_allCategories.any((c) => c.name.toLowerCase() == newName.toLowerCase())) return;
     final idx = _allCategories.indexWhere((c) => c.name == oldName);
     if (idx < 0) return;
     final old = _allCategories[idx];
     await _taskService!.deleteCategory(old.id);
     final updated = Category(id: _uuid.v4(), name: newName, color: old.color, icon: old.icon);
     await _taskService!.createCategory(updated);
-    _allCategories[idx] = updated;
+    _allCategories = [..._allCategories]..[idx] = updated;
     if (_hiddenNames.contains(oldName)) {
-      _hiddenNames.remove(oldName);
-      _hiddenNames.add(newName);
+      _hiddenNames = {..._hiddenNames}..remove(oldName)..add(newName);
     }
     notifyListeners();
     await _saveHidden();
+    _cleanupOrphans();
   }
 
   Future<void> updateTagColor(String name, Color color) async {
@@ -108,11 +131,11 @@ class TagProvider extends ChangeNotifier {
     if (idx < 0) return;
     final old = _allCategories[idx];
     final colorStr = '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-    await _taskService!.deleteCategory(old.id);
-    final updated = Category(id: _uuid.v4(), name: name, color: colorStr, icon: old.icon);
-    await _taskService!.createCategory(updated);
-    _allCategories[idx] = updated;
+    final updated = old.copyWith(color: colorStr);
+    await _taskService!.updateCategory(updated);
+    _allCategories = [..._allCategories]..[idx] = updated;
     notifyListeners();
+    _cleanupOrphans();
   }
 
   Future<void> toggleVisibility(String name) async {
@@ -163,4 +186,11 @@ class TagProvider extends ChangeNotifier {
 
   String _hexForIndex(int index) => _palette[index % _palette.length];
   Color _colorForIndex(int index) => parseHexColor(_hexForIndex(index));
+
+  /// 删除本地数据库中不在当前列表里的旧 Category 记录（rename/colorUpdate 后清理旧 UUID）
+  void _cleanupOrphans() {
+    if (_taskService == null) return;
+    final activeIds = _allCategories.map((c) => c.id).toSet();
+    _taskService!.deleteOrphanCategories(activeIds);
+  }
 }

@@ -55,6 +55,7 @@ class DatabaseHelper {
   Future<int> insertCategory(Map<String, dynamic> row) async => 0;
   Future<List<Map<String, dynamic>>> queryAllCategories() async => [];
   Future<Map<String, dynamic>?> queryCategory(String id) async => null;
+  Future<int> updateCategory(Map<String, dynamic> row) async => 0;
   Future<int> deleteCategory(String id) async => 0;
 
   Future<int> insertFocusSession(Map<String, dynamic> row) async => 0;

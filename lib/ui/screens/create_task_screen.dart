@@ -137,49 +137,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
     });
   }
 
-  void _addCustomTag() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add New Tag'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Enter tag name',
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (value) {
-            final name = value.trim();
-            if (name.isNotEmpty) {
-              ref.read(tagProviderProvider.notifier).addTag(name);
-              setState(() => _activeTags.add(name));
-            }
-            Navigator.pop(ctx);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                ref.read(tagProviderProvider.notifier).addTag(name);
-                setState(() => _activeTags.add(name));
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatLocalDate(DateTime date) {
     final d = date.toLocal();
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -497,32 +454,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                                 onTap: () => _toggleTag(tag.name),
                               );
                             }),
-                            // 添加标签按钮
-                            GestureDetector(
-                              onTap: _addCustomTag,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: BorderRadius.circular(9999),
-                                ),
-                                child: const Icon(Icons.add, size: 16, color: Color(0xff434655)),
-                              ),
-                            ),
-                            // 管理标签按钮
-                            GestureDetector(
-                              onTap: () => ManageTagsDialog.show(context),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: BorderRadius.circular(9999),
-                                ),
-                                child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
-                              ),
-                            ),
-                            // 项目选择器
-                            _buildProjectSelector(),
                           ],
                         );
                       },
@@ -545,7 +476,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
 
           // 底部操作按钮和提示
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // 详情编辑按钮
               IconButton(
@@ -558,6 +488,23 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                 color: const Color(0xff434655).withValues(alpha: 0.6),
                 tooltip: 'Detail Edit',
               ),
+              // 管理标签按钮
+              GestureDetector(
+                onTap: () => ManageTagsDialog.show(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 项目选择器
+              _buildProjectSelector(),
+
+              const Spacer(),
 
               // 提示文字
               Text(
@@ -849,32 +796,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                                               onTap: () => _toggleTag(tag.name),
                                             );
                                           }),
-                                          // 添加标签按钮
-                                          GestureDetector(
-                                            onTap: _addCustomTag,
-                                            child: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.surfaceContainerHigh,
-                                                borderRadius: BorderRadius.circular(9999),
-                                              ),
-                                              child: const Icon(Icons.add, size: 16, color: Color(0xff434655)),
-                                            ),
-                                          ),
-                                          // 管理标签按钮
-                                          GestureDetector(
-                                            onTap: () => ManageTagsDialog.show(context),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.surfaceContainerHigh,
-                                                borderRadius: BorderRadius.circular(9999),
-                                              ),
-                                              child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
-                                            ),
-                                          ),
-                                          // 项目选择器
-                                          _buildProjectSelector(),
                                         ],
                                       );
                                     },
@@ -897,7 +818,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
 
                         // 底部操作按钮和提示
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             // 详情编辑按钮
                             IconButton(
@@ -909,6 +829,23 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen>
                               color: const Color(0xff434655).withValues(alpha: 0.6),
                               tooltip: 'Detail Edit',
                             ),
+                            // 管理标签按钮
+                            GestureDetector(
+                              onTap: () => ManageTagsDialog.show(context),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: const Icon(Icons.tune, size: 16, color: Color(0xff434655)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // 项目选择器
+                            _buildProjectSelector(),
+
+                            const Spacer(),
 
                             // 提示文字
                             Text(

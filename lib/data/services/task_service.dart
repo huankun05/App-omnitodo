@@ -600,6 +600,16 @@ class TaskService {
     }
   }
 
+  Future<void> updateCategory(Category category) async {
+    await _db.updateCategory(_categoryToRow(category));
+    try {
+      await _dio.put('/categories/${category.id}', data: category.toJson());
+    } catch (e) {
+      await _db.markPendingSync(
+          'update_category', category.id, category.toJson());
+    }
+  }
+
   Future<void> deleteCategory(String id) async {
     await _db.deleteCategory(id);
     try {
@@ -733,6 +743,9 @@ class TaskService {
           case 'create_category':
             await _dio.post('/categories', data: payload);
             break;
+          case 'update_category':
+            await _dio.put('/categories/$targetId', data: payload);
+            break;
           case 'delete_category':
             await _dio.delete('/categories/$targetId');
             break;
@@ -775,8 +788,23 @@ class TaskService {
       final existing = await _db.queryCategory(c.id);
       if (existing == null) {
         await _db.insertCategory(_categoryToRow(c));
+      } else {
+        await _db.updateCategory(_categoryToRow(c));
       }
     }
+  }
+
+  /// 删除本地数据库中不在 [activeIds] 集合里的旧 Category 记录
+  Future<void> deleteOrphanCategories(Set<String> activeIds) async {
+    try {
+      final rows = await _db.queryAllCategories();
+      for (final row in rows) {
+        final id = row['id'] as String;
+        if (!activeIds.contains(id)) {
+          await _db.deleteCategory(id);
+        }
+      }
+    } catch (_) {}
   }
 
   Future<List<Category>> _getCategoriesFromLocal() async {

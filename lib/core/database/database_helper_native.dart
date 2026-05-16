@@ -332,6 +332,16 @@ class DatabaseHelper {
     return results.isNotEmpty ? results.first : null;
   }
 
+  Future<int> updateCategory(Map<String, dynamic> row) async {
+    final db = await database;
+    return await db.update(
+      tableCategories,
+      row,
+      where: '$columnCategoryId = ?',
+      whereArgs: [row['id']],
+    );
+  }
+
   Future<int> deleteCategory(String id) async {
     final db = await database;
     return await db.delete(
